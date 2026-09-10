@@ -41,6 +41,29 @@
     window.open(docUrl, '_blank');
   });
 
+  // Print Current Document
+  document.getElementById('print-current-doc-btn')?.addEventListener('click', () => {
+    const iframe = document.getElementById('pdf-viewer-iframe');
+    const activeFile = window.FileBrowser?.getSelectedFile ? window.FileBrowser.getSelectedFile() : '';
+    if (!activeFile && (!iframe || !iframe.src)) {
+      showToast('Select a document first!', 'error');
+      return;
+    }
+
+    try {
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } else {
+        const docUrl = `/api/view?file=${encodeURIComponent(activeFile)}`;
+        window.open(docUrl, '_blank');
+      }
+    } catch (e) {
+      const docUrl = `/api/view?file=${encodeURIComponent(activeFile)}`;
+      window.open(docUrl, '_blank');
+    }
+  });
+
   // Maximize / Fullscreen Viewer
   const maxBtn = document.getElementById('maximize-viewer-btn');
   const maxCard = document.getElementById('pdf-viewer-main-card');

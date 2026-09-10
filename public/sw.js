@@ -13,7 +13,8 @@ const ASSETS_TO_CACHE = [
   '/js/pos.js',
   '/js/qr-generator.js',
   '/js/file-browser.js',
-  '/js/printing.js'
+  '/js/printing.js',
+  '/js/pdf-lib.min.js'
 ];
 
 self.addEventListener('install', (event) => {

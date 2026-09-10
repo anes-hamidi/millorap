@@ -31,6 +31,8 @@
 
   <!-- QRCodeStyling library -->
   <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.5.0/lib/qr-code-styling.js"></script>
+  <!-- PDF-Lib library (local + CDN fallback) for client-side and offline PDF merging -->
+  <script src="js/pdf-lib.min.js"></script>
   <!-- Custom CSS -->
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -589,8 +591,8 @@
               </div>
 
               <!-- Quick Tree Controls & Stats Bar -->
-              <div class="flex items-center justify-between pt-1.5 border-t border-slate-200/60 dark:border-slate-800/80 text-[11px]">
-                <div class="flex items-center gap-1.5">
+              <div class="flex items-center justify-between pt-1.5 border-t border-slate-200/60 dark:border-slate-800/80 text-[11px] gap-1">
+                <div class="flex items-center gap-1">
                   <button id="expand-all-btn" class="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium border border-slate-200 dark:border-slate-700 transition" title="Expand loaded folders">
                     ➕ Expand
                   </button>
@@ -598,7 +600,24 @@
                     ➖ Collapse
                   </button>
                 </div>
-                <span id="file-explorer-stats" class="text-slate-400 text-[10px] font-mono truncate">0 files</span>
+                <button id="multi-select-toggle-btn" class="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold border border-slate-200 dark:border-slate-700 transition flex items-center gap-1" title="Toggle checkbox multi-file selection">
+                  <span>☑️</span> <span id="multi-select-toggle-label">Multi-Select</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Multi-Select Selection Summary Bar (shown when files selected) -->
+            <div id="multi-select-bar" class="hidden p-2.5 rounded-xl bg-indigo-50/90 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800 flex flex-col gap-2 shadow-sm animate-fade-in">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-black text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
+                  <span>📑</span> <span id="multi-selected-count">0 files selected</span>
+                </span>
+                <button id="clear-selection-btn" class="text-[11px] font-bold text-rose-500 hover:text-rose-700 underline">Clear</button>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <button id="open-merge-modal-btn" class="flex-1 btn-gradient text-white py-1.5 px-3 rounded-lg text-xs font-extrabold shadow-sm flex items-center justify-center gap-1.5 hover:scale-102 active:scale-98 transition">
+                  <span>✨</span> Merge Selected PDFs
+                </button>
               </div>
             </div>
 
@@ -630,8 +649,16 @@
                 </div>
               </div>
 
-              <!-- Quick Viewer Actions: Open in Tab + Maximize / Fullscreen -->
-              <div class="flex items-center gap-2 shrink-0">
+              <!-- Quick Viewer Actions: Merge Button + Open in Tab + Print Document + Maximize / Fullscreen -->
+              <div class="flex items-center gap-2 shrink-0 flex-wrap">
+                <button id="viewer-merge-btn" class="hidden px-3 py-1.5 rounded-xl btn-gradient text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Merge selected files">
+                  <span>✨</span> <span>Merge (<span id="viewer-merge-count">0</span>)</span>
+                </button>
+
+                <button id="print-current-doc-btn" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Print this document">
+                  <span>🖨️</span> <span>Print</span>
+                </button>
+
                 <button id="open-tab-btn" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Open document in a new browser tab">
                   <span>↗</span> <span>Open in Tab</span>
                 </button>
@@ -1148,6 +1175,76 @@
       </div>
 
       <p class="text-xs text-slate-500 dark:text-slate-400">Align the barcode or QR code inside the camera frame to scan automatically.</p>
+    </div>
+  </div>
+
+  <!-- MODAL 5: PDF Multi-File Merge & Print/Save Dialog -->
+  <div id="pdf-merge-modal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-xl w-full shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+      
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">✨</span>
+          <div>
+            <h3 class="text-base font-extrabold text-slate-800 dark:text-slate-100">Merge Selected Documents</h3>
+            <p class="text-[11px] text-slate-400">Combine multiple PDF files into one document for printing or saving</p>
+          </div>
+        </div>
+        <button id="close-merge-modal-btn" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 text-lg">✕</button>
+      </div>
+
+      <!-- Selected Files Queue with Re-ordering & Remove -->
+      <div class="flex flex-col gap-2">
+        <div class="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+          <span>Files to Combine (<span id="merge-modal-count">0</span>):</span>
+          <span class="text-[10px] text-slate-400 font-normal">Use arrows to adjust order</span>
+        </div>
+        <div id="merge-files-list" class="max-h-48 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col gap-1.5 text-xs">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <!-- Merged File Name Configuration -->
+      <div class="flex flex-col gap-1.5">
+        <label for="merge-output-filename" class="text-xs font-bold text-slate-700 dark:text-slate-300">
+          New Merged File Name:
+        </label>
+        <div class="flex items-center gap-2">
+          <input type="text" id="merge-output-filename" value="Merged_Documents.pdf" placeholder="e.g. Exam_Subjects_Full.pdf" class="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition font-medium">
+          <span class="text-xs font-mono text-slate-400 font-bold">.pdf</span>
+        </div>
+      </div>
+
+      <!-- Target Save Folder (Optional) -->
+      <div class="flex flex-col gap-1.5">
+        <label for="merge-target-folder" class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+          <span>Save Destination Folder:</span>
+          <span class="text-[10px] text-indigo-500 cursor-pointer hover:underline" id="merge-use-current-folder">Use Current Folder</span>
+        </label>
+        <input type="text" id="merge-target-folder" value="" placeholder="Leave empty for root folder" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition font-mono">
+      </div>
+
+      <!-- Progress / Status Indicator -->
+      <div id="merge-status-box" class="hidden p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/80 text-xs flex items-center gap-2.5">
+        <span class="animate-spin text-indigo-600 text-base">⏳</span>
+        <span id="merge-status-text" class="text-indigo-900 dark:text-indigo-200 font-medium">Merging documents...</span>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-800">
+        <button id="merge-download-btn" class="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+          <span>⬇️</span> Download Merged
+        </button>
+
+        <button id="merge-print-btn" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold transition flex items-center gap-1.5 shadow-sm shadow-emerald-600/30">
+          <span>🖨️</span> Merge & Print
+        </button>
+
+        <button id="merge-save-btn" class="px-5 py-2.5 rounded-xl btn-gradient text-white text-xs font-extrabold transition flex items-center gap-1.5 shadow-md">
+          <span>💾</span> Save New File
+        </button>
+      </div>
+
     </div>
   </div>
 

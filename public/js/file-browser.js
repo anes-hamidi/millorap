@@ -11,6 +11,11 @@
   let searchTimeout = null;
   let explorerControlsBound = false;
 
+  // Multi-file Selection State
+  let multiSelectMode = false;
+  const selectedFiles = new Set(); // set of relative file paths
+  const selectedFilesInfo = new Map(); // path -> { name, isPdf, sizeMB }
+
   async function init() {
     await fetchShopFiles();
     setupExplorerControls();
@@ -268,20 +273,42 @@
           li.addEventListener('click', () => navigateToFolder(item.path));
         } else {
           const isActive = activeShopFilePath === item.path;
+          const isSelected = selectedFiles.has(item.path);
           li.innerHTML = `
-            <div class="p-2 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/70 transition border flex items-center justify-between ${
-              isActive
+            <div class="tree-file-row p-2 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/70 transition border flex items-center justify-between ${
+              isSelected
+                ? 'is-selected font-semibold'
+                : isActive
                 ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 font-semibold'
                 : 'border-slate-200/50 dark:border-slate-800/60 text-slate-600 dark:text-slate-400'
             }">
-              <div class="flex items-center gap-1.5 min-w-0 truncate">
+              <div class="flex items-center gap-2 min-w-0 truncate">
+                ${multiSelectMode || selectedFiles.size > 0 ? `
+                  <input type="checkbox" class="file-checkbox w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-700" ${isSelected ? 'checked' : ''}>
+                ` : ''}
                 <span>${item.isPdf ? '📕' : '📄'}</span>
                 <span class="truncate font-medium">${window.escapeHtml(item.name)}</span>
               </div>
               <span class="text-[10px] text-slate-400 font-mono ml-2 shrink-0 truncate max-w-[120px]">${window.escapeHtml(item.path)}</span>
             </div>
           `;
-          li.addEventListener('click', () => selectShopFile(item.path));
+
+          const checkbox = li.querySelector('.file-checkbox');
+          if (checkbox) {
+            checkbox.addEventListener('click', (e) => {
+              e.stopPropagation();
+              toggleSelectFile(item.path, { name: item.name, isPdf: item.isPdf });
+            });
+          }
+
+          li.addEventListener('click', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+            if (multiSelectMode) {
+              toggleSelectFile(item.path, { name: item.name, isPdf: item.isPdf });
+            } else {
+              selectShopFile(item.path);
+            }
+          });
         }
 
         ul.appendChild(li);
@@ -371,25 +398,44 @@
       } else {
         const cleanPath = node.path.replace(/\\/g, '/');
         const isActive = activeShopFilePath === cleanPath;
+        const isSelected = selectedFiles.has(cleanPath);
 
         const fileRow = document.createElement('div');
         fileRow.setAttribute('data-file-path', cleanPath);
         fileRow.className = `tree-file-row group p-1.5 rounded-xl cursor-pointer flex items-center justify-between transition ${
-          isActive
+          isSelected
+            ? 'is-selected font-semibold'
+            : isActive
             ? 'active'
             : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-slate-100'
         }`;
 
         fileRow.innerHTML = `
-          <span class="truncate flex items-center gap-1.5 min-w-0">
+          <div class="truncate flex items-center gap-2 min-w-0">
+            ${multiSelectMode || selectedFiles.size > 0 ? `
+              <input type="checkbox" class="file-checkbox w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-700" ${isSelected ? 'checked' : ''}>
+            ` : ''}
             <span class="text-sm shrink-0">${node.isPdf ? '📕' : '📄'}</span>
-            <span class="truncate ${isActive ? 'font-bold' : 'font-medium'}">${window.escapeHtml(node.name)}</span>
-          </span>
+            <span class="truncate ${isActive || isSelected ? 'font-bold' : 'font-medium'}">${window.escapeHtml(node.name)}</span>
+          </div>
           <span class="text-[10px] text-slate-400 dark:text-slate-500 font-mono ml-2 shrink-0 opacity-80">${node.sizeMB || '0'} MB</span>
         `;
 
-        fileRow.addEventListener('click', () => {
-          selectShopFile(cleanPath);
+        const checkbox = fileRow.querySelector('.file-checkbox');
+        if (checkbox) {
+          checkbox.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleSelectFile(cleanPath, node);
+          });
+        }
+
+        fileRow.addEventListener('click', (e) => {
+          if (e.target.tagName === 'INPUT') return;
+          if (multiSelectMode) {
+            toggleSelectFile(cleanPath, node);
+          } else {
+            selectShopFile(cleanPath);
+          }
         });
 
         li.appendChild(fileRow);
@@ -399,6 +445,321 @@
     });
 
     return ul;
+  }
+
+  // --- Multi-Select Helper Functions ---
+  function toggleSelectFile(filePath, meta = {}) {
+    const cleanPath = filePath.replace(/\\/g, '/');
+    if (selectedFiles.has(cleanPath)) {
+      selectedFiles.delete(cleanPath);
+      selectedFilesInfo.delete(cleanPath);
+    } else {
+      selectedFiles.add(cleanPath);
+      selectedFilesInfo.set(cleanPath, {
+        path: cleanPath,
+        name: meta.name || cleanPath.split('/').pop(),
+        isPdf: meta.isPdf !== undefined ? meta.isPdf : cleanPath.toLowerCase().endsWith('.pdf'),
+        sizeMB: meta.sizeMB || '0'
+      });
+    }
+
+    updateMultiSelectUI();
+    renderShopTree();
+  }
+
+  function clearAllSelectedFiles() {
+    selectedFiles.clear();
+    selectedFilesInfo.clear();
+    updateMultiSelectUI();
+    renderShopTree();
+    window.showToast('File selection cleared');
+  }
+
+  function updateMultiSelectUI() {
+    const bar = document.getElementById('multi-select-bar');
+    const countEl = document.getElementById('multi-selected-count');
+    const viewerMergeBtn = document.getElementById('viewer-merge-btn');
+    const viewerMergeCount = document.getElementById('viewer-merge-count');
+    const toggleBtn = document.getElementById('multi-select-toggle-btn');
+    const toggleLabel = document.getElementById('multi-select-toggle-label');
+
+    const count = selectedFiles.size;
+
+    if (bar) {
+      if (count > 0) {
+        bar.classList.remove('hidden');
+        if (countEl) countEl.innerText = `${count} file${count !== 1 ? 's' : ''} selected`;
+      } else {
+        bar.classList.add('hidden');
+      }
+    }
+
+    if (viewerMergeBtn) {
+      if (count >= 1) {
+        viewerMergeBtn.classList.remove('hidden');
+        if (viewerMergeCount) viewerMergeCount.innerText = count;
+      } else {
+        viewerMergeBtn.classList.add('hidden');
+      }
+    }
+
+    if (toggleBtn && toggleLabel) {
+      if (multiSelectMode) {
+        toggleBtn.classList.add('bg-indigo-600', 'text-white');
+        toggleBtn.classList.remove('bg-white', 'dark:bg-slate-800', 'text-indigo-600', 'dark:text-indigo-400');
+        toggleLabel.innerText = 'Exit Multi';
+      } else {
+        toggleBtn.classList.remove('bg-indigo-600', 'text-white');
+        toggleBtn.classList.add('bg-white', 'dark:bg-slate-800', 'text-indigo-600', 'dark:text-indigo-400');
+        toggleLabel.innerText = 'Multi-Select';
+      }
+    }
+  }
+
+  // --- Merge Modal Management ---
+  function openMergeModal() {
+    if (selectedFiles.size < 1) {
+      window.showToast('Please select at least 1 document to merge', 'error');
+      return;
+    }
+
+    const modal = document.getElementById('pdf-merge-modal');
+    const countEl = document.getElementById('merge-modal-count');
+    const listEl = document.getElementById('merge-files-list');
+    const filenameInput = document.getElementById('merge-output-filename');
+    const targetFolderInput = document.getElementById('merge-target-folder');
+    const statusBox = document.getElementById('merge-status-box');
+
+    if (!modal) return;
+
+    if (statusBox) statusBox.classList.add('hidden');
+
+    if (countEl) countEl.innerText = selectedFiles.size;
+
+    // Suggest intelligent merged file name based on selected items
+    const selectedArray = Array.from(selectedFiles);
+    const firstInfo = selectedFilesInfo.get(selectedArray[0]);
+    if (filenameInput) {
+      if (selectedArray.length === 1 && firstInfo) {
+        filenameInput.value = `Copy_${firstInfo.name.replace(/\.pdf$/i, '')}.pdf`;
+      } else if (firstInfo) {
+        filenameInput.value = `Merged_${firstInfo.name.replace(/\.pdf$/i, '').substring(0, 20)}_and_${selectedArray.length - 1}_more.pdf`;
+      } else {
+        filenameInput.value = `Merged_Documents_${Date.now().toString().slice(-4)}.pdf`;
+      }
+    }
+
+    if (targetFolderInput) {
+      targetFolderInput.value = currentNavPath || '';
+    }
+
+    renderMergeModalList();
+    modal.classList.remove('hidden');
+  }
+
+  function renderMergeModalList() {
+    const listEl = document.getElementById('merge-files-list');
+    const countEl = document.getElementById('merge-modal-count');
+    if (!listEl) return;
+
+    const filesArray = Array.from(selectedFiles);
+    if (countEl) countEl.innerText = filesArray.length;
+
+    if (filesArray.length === 0) {
+      listEl.innerHTML = `<div class="text-slate-400 text-center py-4">No files selected.</div>`;
+      return;
+    }
+
+    listEl.innerHTML = filesArray.map((path, idx) => {
+      const info = selectedFilesInfo.get(path) || { name: path.split('/').pop(), isPdf: true };
+      const isFirst = idx === 0;
+      const isLast = idx === filesArray.length - 1;
+
+      return `
+        <div class="p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-2 shadow-sm">
+          <div class="flex items-center gap-2 min-w-0 flex-1 truncate">
+            <span class="font-mono text-[10px] text-slate-400 font-bold w-4">${idx + 1}.</span>
+            <span class="text-sm">${info.isPdf ? '📕' : '📄'}</span>
+            <span class="font-medium text-slate-800 dark:text-slate-200 truncate">${window.escapeHtml(info.name)}</span>
+            <span class="text-[9px] text-slate-400 font-mono truncate hidden sm:inline">/${window.escapeHtml(path)}</span>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <button onclick="window.FileBrowser.moveMergeItem(${idx}, -1)" ${isFirst ? 'disabled' : ''} class="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 disabled:opacity-20" title="Move Up">▲</button>
+            <button onclick="window.FileBrowser.moveMergeItem(${idx}, 1)" ${isLast ? 'disabled' : ''} class="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 disabled:opacity-20" title="Move Down">▼</button>
+            <button onclick="window.FileBrowser.removeMergeItem('${path.replace(/'/g, "\\'")}')" class="p-1 rounded hover:bg-rose-100 dark:hover:bg-rose-950 text-rose-500 font-bold ml-1" title="Remove">✕</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function moveMergeItem(index, delta) {
+    const filesArray = Array.from(selectedFiles);
+    const targetIdx = index + delta;
+    if (targetIdx < 0 || targetIdx >= filesArray.length) return;
+
+    const temp = filesArray[index];
+    filesArray[index] = filesArray[targetIdx];
+    filesArray[targetIdx] = temp;
+
+    selectedFiles.clear();
+    filesArray.forEach(p => selectedFiles.add(p));
+    renderMergeModalList();
+    updateMultiSelectUI();
+  }
+
+  function removeMergeItem(path) {
+    selectedFiles.delete(path);
+    selectedFilesInfo.delete(path);
+    renderMergeModalList();
+    updateMultiSelectUI();
+    renderShopTree();
+  }
+
+  // --- Perform Merge Action (Save | Print | Download) ---
+  async function executeMerge(actionType) {
+    const filesArray = Array.from(selectedFiles);
+    if (filesArray.length === 0) {
+      window.showToast('No files to merge', 'error');
+      return;
+    }
+
+    const filenameInput = document.getElementById('merge-output-filename');
+    const targetFolderInput = document.getElementById('merge-target-folder');
+    const statusBox = document.getElementById('merge-status-box');
+    const statusText = document.getElementById('merge-status-text');
+
+    let saveName = (filenameInput?.value || 'Merged_Documents.pdf').trim();
+    if (!saveName.toLowerCase().endsWith('.pdf')) saveName += '.pdf';
+    const targetFolder = (targetFolderInput?.value || '').trim();
+
+    if (statusBox) statusBox.classList.remove('hidden');
+    if (statusText) {
+      statusText.innerText = actionType === 'save'
+        ? `Merging and saving "${saveName}"...`
+        : actionType === 'print'
+        ? `Preparing merged document for printing...`
+        : `Building merged PDF for download...`;
+    }
+
+    try {
+      if (actionType === 'save') {
+        const res = await fetch('/api/merge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            files: filesArray,
+            saveName: saveName,
+            targetFolder: targetFolder,
+            action: 'save'
+          })
+        });
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Server merge failed');
+
+        window.showToast(`Saved: ${data.fileName}`);
+
+        // Close modal
+        document.getElementById('pdf-merge-modal')?.classList.add('hidden');
+
+        // Reload the affected folder and select newly created merged file
+        if (data.savedPath) {
+          await fetchFolderItems(targetFolder);
+          await selectShopFile(data.savedPath);
+        } else {
+          await fetchShopFiles();
+        }
+
+      } else if (actionType === 'download') {
+        const res = await fetch('/api/merge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            files: filesArray,
+            saveName: saveName,
+            action: 'download'
+          })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Download failed');
+        }
+
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = saveName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+
+        window.showToast(`Downloaded: ${saveName}`);
+        document.getElementById('pdf-merge-modal')?.classList.add('hidden');
+
+      } else if (actionType === 'print') {
+        // Fetch merged file as blob and load into iframe or new tab to print
+        const res = await fetch('/api/merge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            files: filesArray,
+            saveName: saveName,
+            action: 'view'
+          })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Print generation failed');
+        }
+
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+
+        // Load into main viewer iframe
+        const iframe = document.getElementById('pdf-viewer-iframe');
+        const placeholder = document.getElementById('pdf-viewer-placeholder');
+        const selectedDisp = document.getElementById('selected-file-display');
+        const subtext = document.getElementById('viewer-file-subtext');
+        const badge = document.getElementById('viewer-pdf-badge');
+
+        if (selectedDisp) selectedDisp.innerText = `Merged: ${saveName}`;
+        if (badge) badge.classList.remove('hidden');
+        if (subtext) subtext.innerText = `Combined ${filesArray.length} files (Ready to print)`;
+
+        if (iframe && placeholder) {
+          placeholder.classList.add('hidden');
+          iframe.classList.remove('hidden');
+          iframe.src = blobUrl;
+        }
+
+        document.getElementById('pdf-merge-modal')?.classList.add('hidden');
+        window.showToast('Merged preview loaded. Opening print dialog...');
+
+        // Trigger print after short delay
+        setTimeout(() => {
+          try {
+            if (iframe && iframe.contentWindow) {
+              iframe.contentWindow.focus();
+              iframe.contentWindow.print();
+            } else {
+              window.open(blobUrl, '_blank');
+            }
+          } catch (e) {
+            window.open(blobUrl, '_blank');
+          }
+        }, 500);
+      }
+    } catch (err) {
+      console.error('Merge execution error:', err);
+      window.showToast(`Error: ${err.message}`, 'error');
+    } finally {
+      if (statusBox) statusBox.classList.add('hidden');
+    }
   }
 
   async function selectShopFile(filePath) {
@@ -523,6 +884,37 @@
       renderBreadcrumbs();
       searchInput?.focus();
     });
+
+    // Multi-Select toggle button
+    document.getElementById('multi-select-toggle-btn')?.addEventListener('click', () => {
+      multiSelectMode = !multiSelectMode;
+      updateMultiSelectUI();
+      renderShopTree();
+      window.showToast(multiSelectMode ? 'Multi-select enabled: Click files or boxes to select' : 'Multi-select disabled');
+    });
+
+    // Clear selection
+    document.getElementById('clear-selection-btn')?.addEventListener('click', clearAllSelectedFiles);
+
+    // Open merge modal buttons
+    document.getElementById('open-merge-modal-btn')?.addEventListener('click', openMergeModal);
+    document.getElementById('viewer-merge-btn')?.addEventListener('click', openMergeModal);
+
+    // Close merge modal
+    document.getElementById('close-merge-modal-btn')?.addEventListener('click', () => {
+      document.getElementById('pdf-merge-modal')?.classList.add('hidden');
+    });
+
+    // Use current folder shortcut in merge modal
+    document.getElementById('merge-use-current-folder')?.addEventListener('click', () => {
+      const folderInput = document.getElementById('merge-target-folder');
+      if (folderInput) folderInput.value = currentNavPath || '';
+    });
+
+    // Merge execution buttons
+    document.getElementById('merge-save-btn')?.addEventListener('click', () => executeMerge('save'));
+    document.getElementById('merge-download-btn')?.addEventListener('click', () => executeMerge('download'));
+    document.getElementById('merge-print-btn')?.addEventListener('click', () => executeMerge('print'));
   }
 
   // Export FileBrowser module API
@@ -531,7 +923,12 @@
     fetchFiles: fetchShopFiles,
     getSelectedFile: () => activeShopFilePath,
     selectFile: selectShopFile,
-    navigateToFolder: navigateToFolder
+    navigateToFolder: navigateToFolder,
+    getSelectedFiles: () => Array.from(selectedFiles),
+    openMergeModal: openMergeModal,
+    moveMergeItem: moveMergeItem,
+    removeMergeItem: removeMergeItem,
+    clearSelection: clearAllSelectedFiles
   };
   window.selectShopFile = selectShopFile;
 })();

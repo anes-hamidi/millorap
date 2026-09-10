@@ -209,4 +209,98 @@ router.get('/printers', async (req, res) => {
   }
 });
 
+// API: Merge Multiple PDF Files into a single document
+// Can either save with a new name in a folder, or return the merged PDF directly for viewing/printing/download
+router.post('/merge', async (req, res) => {
+  const { files, saveName, targetFolder, action } = req.body;
+  // files: array of relative paths
+  // saveName: string (optional, e.g. "merged_document.pdf")
+  // targetFolder: string (optional relative path)
+  // action: 'save' | 'download' | 'view'
+  if (!Array.isArray(files) || files.length === 0) {
+    return res.status(400).json({ success: false, error: 'At least one file is required for merging' });
+  }
+
+  try {
+    let PDFDocument;
+    try {
+      PDFDocument = require('pdf-lib').PDFDocument;
+    } catch (e) {
+      return res.status(500).json({ success: false, error: 'pdf-lib is not available on server: ' + e.message });
+    }
+
+    const mergedPdf = await PDFDocument.create();
+    const loadedFiles = [];
+
+    for (const relPath of files) {
+      const fullPath = getSafePath(relPath);
+      if (!fs.existsSync(fullPath)) {
+        return res.status(404).json({ success: false, error: `File not found: ${relPath}` });
+      }
+
+      const fileBytes = fs.readFileSync(fullPath);
+      try {
+        const doc = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
+        const copiedPages = await mergedPdf.copyPages(doc, doc.getPageIndices());
+        copiedPages.forEach((page) => mergedPdf.addPage(page));
+        loadedFiles.push(relPath);
+      } catch (docErr) {
+        console.warn(`Could not merge ${relPath}:`, docErr.message);
+        return res.status(400).json({ 
+          success: false, 
+          error: `Failed reading PDF "${path.basename(relPath)}": ${docErr.message}` 
+        });
+      }
+    }
+
+    const mergedPdfBytes = await mergedPdf.save();
+
+    if (action === 'save' || (saveName && action !== 'download' && action !== 'view')) {
+      let cleanName = (saveName || `Merged_${Date.now()}.pdf`).trim();
+      if (!cleanName.toLowerCase().endsWith('.pdf')) cleanName += '.pdf';
+      // Sanitize filename
+      cleanName = cleanName.replace(/[<>:"/\\|?*]+/g, '_');
+
+      const folderRel = (targetFolder || '').trim();
+      const folderFull = getSafePath(folderRel);
+      if (!fs.existsSync(folderFull)) {
+        fs.mkdirSync(folderFull, { recursive: true });
+      }
+
+      const destFullPath = path.join(folderFull, cleanName);
+      // Ensure target path is also safe
+      if (!destFullPath.startsWith(path.resolve(EFFECTIVE_DOCS_DIR))) {
+        throw new Error('Access denied: Invalid target folder');
+      }
+
+      fs.writeFileSync(destFullPath, mergedPdfBytes);
+      const savedRelativePath = path.join(folderRel, cleanName).replace(/\\/g, '/');
+
+      return res.json({
+        success: true,
+        message: `Successfully merged ${loadedFiles.length} files into "${cleanName}"`,
+        savedPath: savedRelativePath,
+        fileName: cleanName,
+        sizeBytes: mergedPdfBytes.length
+      });
+    }
+
+    // Default or action === 'download' / 'view'
+    const fileName = (saveName || `Merged_${Date.now()}.pdf`).trim();
+    const downloadName = fileName.toLowerCase().endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    if (action === 'download') {
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(downloadName)}"`);
+    } else {
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(downloadName)}"`);
+    }
+    return res.send(Buffer.from(mergedPdfBytes));
+
+  } catch (err) {
+    console.error('PDF merge error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
