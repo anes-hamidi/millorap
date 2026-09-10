@@ -1,0 +1,224 @@
+/* Custom Styles for QR Code Generator */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  --primary-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.4);
+}
+
+.dark {
+  --glass-bg: rgba(15, 23, 42, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.1);
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Glassmorphism Card Effect */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+}
+
+/* Gradient Text */
+.text-gradient {
+  background: var(--primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Gradient Button */
+.btn-gradient {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-gradient:hover {
+  background: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
+  box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.5);
+}
+
+/* Custom Input Styling */
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 0.5rem;
+}
+
+/* Form Tab Active Styling */
+.tab-btn.active {
+  background-color: rgba(99, 102, 241, 0.1);
+  color: #6366f1;
+  border-color: #6366f1;
+}
+
+.dark .tab-btn.active {
+  background-color: rgba(139, 92, 246, 0.2);
+  color: #a78bfa;
+  border-color: #a78bfa;
+}
+
+/* Pattern Option Selection Cards */
+.style-option-btn.selected {
+  border-color: #6366f1;
+  background-color: rgba(99, 102, 241, 0.08);
+}
+.dark .style-option-btn.selected {
+  border-color: #8b5cf6;
+  background-color: rgba(139, 92, 246, 0.15);
+}
+
+/* Pulse animation for preview update */
+@keyframes pulse-once {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+/* App Mode Navigation Button Active State */
+.app-mode-btn.active {
+  background-color: #ffffff;
+  color: #4f46e5;
+  font-weight: 700;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+}
+
+.dark .app-mode-btn.active {
+  background-color: #0f172a;
+  color: #818cf8;
+}
+
+/* POS Payment Button Selected State */
+.pos-pay-btn.selected {
+  border-color: #6366f1;
+  background-color: rgba(99, 102, 241, 0.08);
+  color: #4f46e5;
+}
+
+.dark .pos-pay-btn.selected {
+  border-color: #818cf8;
+  background-color: rgba(99, 102, 241, 0.2);
+  color: #a5b4fc;
+}
+
+.qr-update-pulse {
+  animation: pulse-once 0.25s ease-out;
+}
+
+
+/* Print View Formatting */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #print-area, #print-area * {
+    visibility: visible;
+  }
+  #print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+}
+
+/* File Tree Explorer & Navigation Styles */
+.tree-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+.tree-chevron.open {
+  transform: rotate(90deg);
+}
+.tree-children-container {
+  transition: all 0.2s ease-in-out;
+}
+.tree-folder-row:hover {
+  background-color: rgba(99, 102, 241, 0.08);
+}
+.dark .tree-folder-row:hover {
+  background-color: rgba(139, 92, 246, 0.15);
+}
+.tree-file-row.active {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.14) 0%, rgba(139, 92, 246, 0.14) 100%);
+  border-left: 3px solid #6366f1;
+  color: #4f46e5;
+  font-weight: 600;
+}
+.dark .tree-file-row.active {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.28) 0%, rgba(139, 92, 246, 0.28) 100%);
+  border-left: 3px solid #818cf8;
+  color: #c7d2fe;
+}
+.breadcrumb-pill {
+  transition: all 0.15s ease;
+}
+.breadcrumb-pill:hover {
+  background-color: rgba(99, 102, 241, 0.12);
+  color: #4f46e5;
+}
+.dark .breadcrumb-pill:hover {
+  background-color: rgba(139, 92, 246, 0.25);
+  color: #a5b4fc;
+}
+
+/* Maximized & Fullscreen File Viewer */
+.viewer-maximized {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9999 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  border-radius: 0 !important;
+  padding: 0.75rem !important;
+  margin: 0 !important;
+  background-color: rgba(15, 23, 42, 0.97) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+}
+
+.viewer-maximized #pdf-viewer-frame-container {
+  height: calc(100vh - 85px) !important;
+  border-radius: 1rem !important;
+}
+
+/* Sidebar transition */
+#print-sidebar-col {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#print-viewer-col {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+

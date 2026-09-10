@@ -1,0 +1,130 @@
+[
+  {
+    "id": "DZ-1788519227578-123",
+    "timestamp": "2026-09-04T10:53:47.579Z",
+    "items": [
+      {
+        "id": "p1",
+        "name": "Café Espresso",
+        "price": 150,
+        "qty": 2
+      }
+    ],
+    "subtotal": 300,
+    "discount": 0,
+    "total": 300,
+    "paymentMethod": "cash"
+  },
+  {
+    "id": "DZ-1788277982113-206",
+    "timestamp": "2026-09-01T15:53:02.114Z",
+    "items": [
+      {
+        "id": "p_1788277900400",
+        "name": "Câble USB-C Rapide",
+        "price": 450,
+        "qty": 10
+      }
+    ],
+    "subtotal": 4500,
+    "discount": 225,
+    "total": 4275,
+    "paymentMethod": "qr"
+  },
+  {
+    "id": "DZ-1788134773648-586",
+    "timestamp": "2026-08-31T00:06:13.648Z",
+    "items": [
+      {
+        "id": "p1",
+        "name": "Café Espresso",
+        "price": 150,
+        "qty": 1
+      },
+      {
+        "id": "p2",
+        "name": "Thé Vert Naturel",
+        "price": 100,
+        "qty": 1
+      },
+      {
+        "id": "p3",
+        "name": "Croissant Frais",
+        "price": 120,
+        "qty": 2
+      }
+    ],
+    "subtotal": 490,
+    "discount": 0,
+    "total": 490,
+    "paymentMethod": "qr"
+  },
+  {
+    "id": "DZ-1788134167239-118",
+    "timestamp": "2026-08-30T23:56:07.239Z",
+    "items": [
+      {
+        "id": "p3",
+        "name": "Croissant Frais",
+        "price": 120,
+        "qty": 3
+      }
+    ],
+    "subtotal": 360,
+    "discount": 0,
+    "total": 360,
+    "paymentMethod": "qr"
+  },
+  {
+    "id": "TXN-1788132068540-956",
+    "timestamp": "2026-08-30T23:21:08.540Z",
+    "items": [
+      {
+        "id": "p4",
+        "name": "Blueberry Muffin",
+        "price": 3.25,
+        "qty": 3
+      }
+    ],
+    "subtotal": 9.75,
+    "tax": 0.9750000000000001,
+    "discount": 0,
+    "total": 10.725,
+    "paymentMethod": "qr"
+  },
+  {
+    "id": "TXN-1788131897843-905",
+    "timestamp": "2026-08-30T23:18:17.843Z",
+    "items": [
+      {
+        "id": "p4",
+        "name": "Blueberry Muffin",
+        "price": 3.25,
+        "qty": 1
+      },
+      {
+        "id": "p3",
+        "name": "Fresh Croissant",
+        "price": 2.99,
+        "qty": 1
+      },
+      {
+        "id": "p2",
+        "name": "Organic Green Tea",
+        "price": 3,
+        "qty": 3
+      },
+      {
+        "id": "p9",
+        "name": "Thermal Paper Rolls (Pack of 5)",
+        "price": 12.5,
+        "qty": 6
+      }
+    ],
+    "subtotal": 90.24,
+    "tax": 9.024,
+    "discount": 0,
+    "total": 99.264,
+    "paymentMethod": "cash"
+  }
+]

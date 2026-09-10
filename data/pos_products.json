@@ -1,0 +1,11 @@
+[
+  { "id": "p1", "name": "Café Espresso", "category": "Beverage", "price": 150, "stock": 99, "icon": "☕", "image": "https://images.unsplash.com/photo-1510591509098-f4fdc6d0ff04?w=400&auto=format&fit=crop&q=80", "barcode": "890123456001" },
+  { "id": "p2", "name": "Thé Vert Naturel", "category": "Beverage", "price": 100, "stock": 50, "icon": "🍵", "image": "https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=400&auto=format&fit=crop&q=80", "barcode": "890123456002" },
+  { "id": "p3", "name": "Croissant Frais", "category": "Bakery", "price": 120, "stock": 35, "icon": "🥐", "image": "https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=400&auto=format&fit=crop&q=80", "barcode": "890123456003" },
+  { "id": "p4", "name": "Muffin Chocolat", "category": "Bakery", "price": 180, "stock": 25, "icon": "🧁", "image": "https://images.unsplash.com/photo-1607958996333-41aef7caefaa?w=400&auto=format&fit=crop&q=80", "barcode": "890123456004" },
+  { "id": "p5", "name": "Impression Document (Couleur)", "category": "Printing", "price": 25, "stock": 999, "icon": "📄", "image": "https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=400&auto=format&fit=crop&q=80", "barcode": "890123456005" },
+  { "id": "p6", "name": "Tirage Photo A4", "category": "Printing", "price": 200, "stock": 150, "icon": "🖼️", "image": "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=400&auto=format&fit=crop&q=80", "barcode": "890123456006" },
+  { "id": "p7", "name": "Écouteurs Sans Fil", "category": "Electronics", "price": 2800, "stock": 15, "icon": "🎧", "image": "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=400&auto=format&fit=crop&q=80", "barcode": "890123456007" },
+  { "id": "p8", "name": "Câble USB-C Rapide", "category": "Electronics", "price": 650, "stock": 40, "icon": "🔌", "image": "https://images.unsplash.com/photo-1612815154858-60aa4c59eaa6?w=400&auto=format&fit=crop&q=80", "barcode": "890123456008" },
+  { "id": "p9", "name": "Rouleaux Papier Thermique (x5)", "category": "Supplies", "price": 900, "stock": 30, "icon": "📜", "image": "https://images.unsplash.com/photo-1607344645866-009c320c5ab8?w=400&auto=format&fit=crop&q=80", "barcode": "890123456009" }
+]

@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Millora — Ultimate All-in-One QR Code Generator</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛒</text></svg>">
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Dexie.js (IndexedDB library) -->
+  <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
+  <link rel="manifest" href="manifest.json">
+
+  <!-- QRCodeStyling library -->
+  <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.5.0/lib/qr-code-styling.js"></script>
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-300 antialiased selection:bg-indigo-500 selection:text-white">
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed top-5 right-5 flex flex-col gap-2 z-50 pointer-events-none"></div>
+
+  <!-- Header -->
+  <header class="border-b border-slate-200/80 dark:border-slate-800/80 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="7" height="7" rx="1.5" stroke-width="2"/>
+            <rect x="14" y="3" width="7" height="7" rx="1.5" stroke-width="2"/>
+            <rect x="3" y="14" width="7" height="7" rx="1.5" stroke-width="2"/>
+            <rect x="14" y="14" width="3" height="3" rx="0.5" stroke-width="2"/>
+            <rect x="18" y="18" width="3" height="3" rx="0.5" stroke-width="2"/>
+            <rect x="14" y="18" width="3" height="3" rx="0.5" stroke-width="2"/>
+            <rect x="18" y="14" width="3" height="3" rx="0.5" stroke-width="2"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-xl font-extrabold tracking-tight text-gradient">Millora</h1>
+          <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">All-in-One QR Code Generator</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <!-- App Mode Switcher -->
+        <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+          <button id="view-pos-app" class="app-mode-btn active px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm">
+            <span>🛒</span> <span>POS Terminal</span>
+          </button>
+          <button id="view-qr-app" class="app-mode-btn px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-all">
+            <span>📱</span> <span>QR Generator</span>
+          </button>
+          <button id="view-print-app" class="app-mode-btn px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-all">
+            <span>🖨️</span> <span>Shop Print Center</span>
+          </button>
+        </div>
+
+
+        <!-- Theme Toggle Button -->
+        <button id="theme-toggle" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="Toggle Light/Dark Theme">
+          <!-- Sun icon -->
+          <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          <!-- Moon icon -->
+          <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
+    <!-- SECTION 1: QR Generator App -->
+    <div id="section-qr-app" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+      
+      <!-- LEFT COLUMN: Data Input Forms & Customization Options (7 Cols) -->
+      <div class="lg:col-span-7 flex flex-col gap-6">
+        
+        <!-- Data Type Tabs Bar -->
+        <div class="glass-panel p-2 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+          <p class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-3 pt-1 pb-2">Select Data Type</p>
+          <div class="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar scroll-smooth">
+            <button data-tab="url" class="tab-btn active px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all border border-transparent hover:bg-slate-100 dark:hover:bg-slate-800">
+              <span>🔗</span> <span>URL / Link</span>
+            </button>
+            <button data-tab="text" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all border border-transparent hover:bg-slate-100 dark:hover:bg-slate-800">
+              <span>📝</span> <span>Plain Text</span>
+            </button>
+            <button data-tab="wifi" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all border border-transparent hover:bg-slate-100 dark:hover:bg-slate-800">
+              <span>📶</span> <span>Wi-Fi</span>
+            </button>
+            <button data-tab="vcard" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all border border-transparent hover:bg-slate-100 dark:hover:bg-slate-800">
+              <span>👤</span> <span>vCard Contact</span>
+            </button>
+            <button data-tab="email" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all border border-transparent hover:bg-slate-100 dark:hover:bg-slate-800">
+              <span>📧</span> <span>Email</span>
+            </button>
+            <button data-tab="sms" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all border border-transparent hover:bg-slate-100 dark:hover:bg-slate-800">
+              <span>💬</span> <span>SMS / Phone</span>
+            </button>
+            <button data-tab="file" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all border border-transparent hover:bg-slate-100 dark:hover:bg-slate-800">
+              <span>📁</span> <span>File / Doc</span>
+            </button>
+            <button data-tab="social" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all border border-transparent hover:bg-slate-100 dark:hover:bg-slate-800">
+              <span>🌐</span> <span>Social Media</span>
+            </button>
+            <button data-tab="crypto" class="tab-btn px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all border border-transparent hover:bg-slate-100 dark:hover:bg-slate-800">
+              <span>💳</span> <span>Crypto / Pay</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Dynamic Form Fields Area -->
+        <div class="glass-panel p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm transition-all">
+          
+          <!-- Large Payload Warning Banner -->
+          <div id="payload-warning" class="hidden mb-4 p-3.5 bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700/60 rounded-xl text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2.5 shadow-sm">
+            <span class="text-base leading-none">⚠️</span>
+            <div class="flex-1">
+              <span class="font-bold">Large Data Warning (<span id="payload-size-count">0</span> characters):</span>
+              <p class="mt-0.5 text-amber-800 dark:text-amber-300">Data exceeds ~1,000 characters. Extremely dense QR codes are difficult or impossible for mobile cameras to scan. Consider linking to a hosted file or shortened URL instead.</p>
+            </div>
+          </div>
+
+          <!-- TAB 1: URL -->
+          <div id="tab-url" class="tab-content flex flex-col gap-4">
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Website URL</label>
+              <input type="text" id="input-url" placeholder="https://example.com/page" value="https://example.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition">
+              <p class="text-xs text-slate-400 mt-1">Enter any valid web address. Protocol (https://) will be added automatically if omitted.</p>
+            </div>
+          </div>
+
+          <!-- TAB 2: TEXT -->
+          <div id="tab-text" class="tab-content hidden flex flex-col gap-4">
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Plain Text or Note</label>
+              <textarea id="input-text" rows="4" placeholder="Enter any text, code, message, or notes here..." class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"></textarea>
+            </div>
+          </div>
+
+          <!-- TAB 3: WIFI -->
+          <div id="tab-wifi" class="tab-content hidden flex flex-col gap-4">
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Network SSID (Name)</label>
+              <input type="text" id="wifi-ssid" placeholder="Home_WiFi_5G" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition">
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Password</label>
+                <input type="password" id="wifi-pass" placeholder="••••••••" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition">
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Encryption Type</label>
+                <select id="wifi-type" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+                  <option value="WPA">WPA / WPA2 / WPA3 (Default)</option>
+                  <option value="WEP">WEP</option>
+                  <option value="nopass">None (Open Network)</option>
+                </select>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 pt-1">
+              <input type="checkbox" id="wifi-hidden" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-700">
+              <label for="wifi-hidden" class="text-sm font-medium text-slate-600 dark:text-slate-400 cursor-pointer">Hidden Network SSID</label>
+            </div>
+          </div>
+
+          <!-- TAB 4: VCARD CONTACT -->
+          <div id="tab-vcard" class="tab-content hidden flex flex-col gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">First Name</label>
+                <input type="text" id="vcard-fn" placeholder="John" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Last Name</label>
+                <input type="text" id="vcard-ln" placeholder="Doe" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Mobile Phone</label>
+                <input type="tel" id="vcard-phone" placeholder="+1 (555) 000-1234" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Email Address</label>
+                <input type="email" id="vcard-email" placeholder="john@company.com" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Organization / Company</label>
+                <input type="text" id="vcard-org" placeholder="Acme Inc." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Job Title</label>
+                <input type="text" id="vcard-title" placeholder="Lead Designer" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Website URL</label>
+                <input type="url" id="vcard-url" placeholder="https://johndoe.com" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Address / City</label>
+                <input type="text" id="vcard-adr" placeholder="New York, NY" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 5: EMAIL -->
+          <div id="tab-email" class="tab-content hidden flex flex-col gap-4">
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Recipient Email (To)</label>
+              <input type="email" id="email-to" placeholder="support@service.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Subject Line</label>
+              <input type="text" id="email-sub" placeholder="Inquiry about services" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Message Body</label>
+              <textarea id="email-body" rows="3" placeholder="Hello, I'd like to ask about..." class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition"></textarea>
+            </div>
+          </div>
+
+          <!-- TAB 6: SMS / PHONE -->
+          <div id="tab-sms" class="tab-content hidden flex flex-col gap-4">
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Phone Number</label>
+              <input type="tel" id="sms-phone" placeholder="+1234567890" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Pre-filled SMS Message (Optional)</label>
+              <textarea id="sms-msg" rows="3" placeholder="Hello! I am contacting you via QR code." class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition"></textarea>
+            </div>
+          </div>
+
+          <!-- TAB 7: FILE -->
+          <div id="tab-file" class="tab-content hidden flex flex-col gap-4">
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Upload File / Document</label>
+              <input type="file" id="file-upload-input" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 dark:file:bg-indigo-950 dark:file:text-indigo-300 hover:file:bg-indigo-100">
+              <input type="hidden" id="file-payload">
+              <p id="file-name-display" class="text-xs text-indigo-600 dark:text-indigo-400 font-medium mt-2"></p>
+              <p class="text-xs text-slate-400 mt-1">Small files (<200KB) are encoded directly as Base64 Data URLs so they can be read offline.</p>
+            </div>
+          </div>
+
+          <!-- TAB 8: SOCIAL MEDIA -->
+          <div id="tab-social" class="tab-content hidden flex flex-col gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Platform</label>
+                <select id="social-platform" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+                  <option value="twitter">Twitter / X</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="linkedin">LinkedIn</option>
+                  <option value="youtube">YouTube</option>
+                  <option value="github">GitHub</option>
+                  <option value="whatsapp">WhatsApp Direct Chat</option>
+                  <option value="appstore">Apple App Store ID</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Username / ID</label>
+                <input type="text" id="social-user" placeholder="username" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 9: CRYPTO & PAYMENTS -->
+          <div id="tab-crypto" class="tab-content hidden flex flex-col gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Payment Method</label>
+                <select id="crypto-type" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+                  <option value="bitcoin">Bitcoin (BTC)</option>
+                  <option value="ethereum">Ethereum (ETH)</option>
+                  <option value="paypal">PayPal.me</option>
+                  <option value="upi">UPI Payment (India)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Wallet Address / VPA / Username</label>
+                <input type="text" id="crypto-address" placeholder="1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Amount (Optional)</label>
+              <input type="text" id="crypto-amount" placeholder="0.005" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition">
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Customization Settings Card (Minimized & Icon-Optimized) -->
+        <div class="glass-panel p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <span>🎨</span> Customization & Design
+            </h2>
+            <span class="text-[10px] text-slate-400 font-medium">Visual Styles & Branding</span>
+          </div>
+
+          <!-- Quick Controls Bar: Colors, Gradient Toggle & ECL -->
+          <div class="flex flex-wrap items-center gap-3 p-3 bg-slate-50/80 dark:bg-slate-900/60 rounded-xl border border-slate-200/60 dark:border-slate-800/60">
+            <!-- Foreground Color -->
+            <div class="flex items-center gap-2" title="QR Code Foreground Color">
+              <label for="fg-color" class="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1 cursor-pointer">
+                <span>🎨</span> Color:
+              </label>
+              <input type="color" id="fg-color" value="#4f46e5" class="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0">
+            </div>
+
+            <!-- Background Color & Transparent Checkbox -->
+            <div class="flex items-center gap-2" title="Background Color">
+              <label for="bg-color" class="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1 cursor-pointer">
+                <span>🔲</span> Bg:
+              </label>
+              <input type="color" id="bg-color" value="#ffffff" class="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0">
+              <label class="flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer ml-1" title="Transparent background">
+                <input type="checkbox" id="transparent-bg" class="rounded text-indigo-600 w-3.5 h-3.5">
+                <span>Transp.</span>
+              </label>
+            </div>
+
+            <!-- Vertical Separator -->
+            <div class="hidden sm:block w-px h-6 bg-slate-200 dark:bg-slate-700"></div>
+
+            <!-- Gradient Toggle -->
+            <div class="flex items-center gap-1.5">
+              <label for="gradient-toggle" class="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5 cursor-pointer" title="Enable Dual-Color Gradient">
+                <input type="checkbox" id="gradient-toggle" class="rounded text-indigo-600 w-3.5 h-3.5">
+                <span>🌈 Gradient</span>
+              </label>
+            </div>
+
+            <!-- Secondary Gradient Controls (Hidden by default) -->
+            <div id="fg-color-2-container" class="hidden flex items-center gap-2">
+              <input type="color" id="fg-color-2" value="#ec4899" class="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0" title="Secondary Gradient Color">
+              <select id="gradient-type" class="px-2 py-1 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+                <option value="linear">Linear</option>
+                <option value="radial">Radial</option>
+              </select>
+            </div>
+
+            <!-- Spacer -->
+            <div class="flex-1"></div>
+
+            <!-- Error Correction Level (Compact) -->
+            <div class="flex items-center gap-1.5" title="Error Correction Level (ECL)">
+              <span class="text-xs font-bold text-slate-600 dark:text-slate-400" title="Error Correction Level">🛡️ ECL:</span>
+              <select id="ecl-select" class="px-2 py-1 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+                <option value="L">L (7%)</option>
+                <option value="M" selected>M (15%)</option>
+                <option value="Q">Q (25%)</option>
+                <option value="H">H (30%)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- WCAG Contrast Warning Banner -->
+          <div id="contrast-warning" class="hidden p-2.5 bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700/60 rounded-xl text-amber-900 dark:text-amber-200 text-xs flex items-center justify-between shadow-sm">
+            <div class="flex items-center gap-2">
+              <span class="text-base leading-none">⚡</span>
+              <span><span class="font-bold">Low Contrast:</span> Ratio is <span id="contrast-ratio-val" class="font-mono font-bold">1.0:1</span>. Scanner cameras may fail.</span>
+            </div>
+            <span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100">Alert</span>
+          </div>
+
+          <!-- Visual Styles: Patterns & Corners with Preview Icons -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Pattern Style (Dots Type) -->
+            <div>
+              <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+                Pattern Style
+              </label>
+              <div class="grid grid-cols-5 gap-1.5">
+                <button data-style="square" class="dot-style-btn selected style-option-btn p-2 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-1 hover:border-indigo-500 transition group" title="Square Pattern">
+                  <svg class="w-5 h-5 text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 transition" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                  <span class="text-[10px] font-bold">Square</span>
+                </button>
+                <button data-style="dots" class="dot-style-btn style-option-btn p-2 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-1 hover:border-indigo-500 transition group" title="Dots Pattern">
+                  <svg class="w-5 h-5 text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 transition" viewBox="0 0 24 24" fill="currentColor"><circle cx="6.5" cy="6.5" r="3.5"/><circle cx="17.5" cy="6.5" r="3.5"/><circle cx="6.5" cy="17.5" r="3.5"/><circle cx="17.5" cy="17.5" r="3.5"/></svg>
+                  <span class="text-[10px] font-bold">Dots</span>
+                </button>
+                <button data-style="rounded" class="dot-style-btn style-option-btn p-2 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-1 hover:border-indigo-500 transition group" title="Rounded Pattern">
+                  <svg class="w-5 h-5 text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 transition" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="2.5"/><rect x="14" y="3" width="7" height="7" rx="2.5"/><rect x="3" y="14" width="7" height="7" rx="2.5"/><rect x="14" y="14" width="7" height="7" rx="2.5"/></svg>
+                  <span class="text-[10px] font-bold">Round</span>
+                </button>
+                <button data-style="extra-rounded" class="dot-style-btn style-option-btn p-2 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-1 hover:border-indigo-500 transition group" title="Extra Rounded Pattern">
+                  <svg class="w-5 h-5 text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 transition" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="3.5"/><rect x="14" y="3" width="7" height="7" rx="3.5"/><rect x="3" y="14" width="7" height="7" rx="3.5"/><rect x="14" y="14" width="7" height="7" rx="3.5"/></svg>
+                  <span class="text-[10px] font-bold">Pill</span>
+                </button>
+                <button data-style="classy" class="dot-style-btn style-option-btn p-2 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-1 hover:border-indigo-500 transition group" title="Classy Diamond Pattern">
+                  <svg class="w-5 h-5 text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 transition" viewBox="0 0 24 24" fill="currentColor"><path d="M6.5 3L10 6.5 6.5 10 3 6.5z"/><path d="M17.5 3L21 6.5 17.5 10 14 6.5z"/><path d="M6.5 14L10 17.5 6.5 21 3 17.5z"/><path d="M17.5 14L21 17.5 17.5 21 14 17.5z"/></svg>
+                  <span class="text-[10px] font-bold">Classy</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Corner Square Style -->
+            <div>
+              <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">
+                Corner Style
+              </label>
+              <div class="grid grid-cols-3 gap-2">
+                <button data-style="square" class="corner-style-btn selected style-option-btn p-2 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2 hover:border-indigo-500 transition group" title="Square Corners">
+                  <svg class="w-5 h-5 text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18"/><rect x="8" y="8" width="8" height="8" fill="currentColor"/></svg>
+                  <span class="text-xs font-bold">Square</span>
+                </button>
+                <button data-style="extra-rounded" class="corner-style-btn style-option-btn p-2 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2 hover:border-indigo-500 transition group" title="Rounded Corners">
+                  <svg class="w-5 h-5 text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="6"/><rect x="8" y="8" width="8" height="8" rx="2" fill="currentColor"/></svg>
+                  <span class="text-xs font-bold">Round</span>
+                </button>
+                <button data-style="dot" class="corner-style-btn style-option-btn p-2 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2 hover:border-indigo-500 transition group" title="Circular Dot Corners">
+                  <svg class="w-5 h-5 text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
+                  <span class="text-xs font-bold">Circle</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Logo Overlay (Compact Line) -->
+          <div class="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <span class="text-sm">🏷️</span>
+              <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Center Logo:</span>
+            </div>
+
+            <div class="flex items-center gap-2 flex-wrap">
+              <select id="logo-preset" class="px-2.5 py-1.5 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+                <option value="none">No Logo</option>
+                <option value="link">🔗 Link Icon</option>
+                <option value="wifi">📶 Wi-Fi Icon</option>
+                <option value="user">👤 User Icon</option>
+                <option value="mail">📧 Mail Icon</option>
+                <option value="whatsapp">💬 WhatsApp</option>
+                <option value="github">🐙 GitHub</option>
+                <option value="bitcoin">₿ Bitcoin</option>
+              </select>
+
+              <input type="file" id="logo-file" accept="image/*" class="hidden">
+              <label for="logo-file" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer border border-slate-200 dark:border-slate-700 transition flex items-center gap-1.5" title="Upload custom image file">
+                <span>📁</span> <span>Upload Custom</span>
+              </label>
+
+              <button id="remove-logo-btn" class="hidden p-1.5 px-2.5 rounded-xl bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400 hover:bg-rose-200 text-xs font-bold transition" title="Remove Logo">
+                ✕ Remove
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN: Live QR Code Preview, Downloads & History (5 Cols) -->
+      <div class="lg:col-span-5 flex flex-col gap-6 lg:sticky lg:top-24">
+        
+        <!-- Live QR Code Preview Card -->
+        <div class="glass-panel p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xl flex flex-col items-center justify-center text-center">
+          
+          <div class="w-full flex items-center justify-between mb-4">
+            <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Live Preview
+            </span>
+            <button id="print-qr-btn" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1">
+              🖨️ Print Card
+            </button>
+          </div>
+
+          <!-- QR Canvas Render Container -->
+          <div class="p-6 bg-white rounded-2xl shadow-inner border border-slate-100 relative min-h-[320px] min-w-[320px] flex items-center justify-center transition-all duration-300">
+            <div id="qr-placeholder" class="flex flex-col items-center justify-center text-slate-400 p-8">
+              <svg class="w-16 h-16 mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4"/></svg>
+              <p class="text-sm font-medium">Type data to generate QR code</p>
+            </div>
+            <div id="qr-canvas-container" class="hidden"></div>
+          </div>
+
+          <!-- QR Summary Info -->
+          <p id="qr-data-summary" class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-4 max-w-full truncate px-2">
+            https://example.com
+          </p>
+
+          <!-- Export Buttons -->
+          <div class="w-full grid grid-cols-3 gap-2 mt-6">
+            <button id="download-png" class="btn-gradient text-white py-3 px-4 rounded-xl text-xs font-bold shadow-md flex items-center justify-center gap-1">
+              <span>⬇️</span> PNG
+            </button>
+            <button id="download-svg" class="bg-slate-800 dark:bg-slate-700 text-white hover:bg-slate-900 py-3 px-4 rounded-xl text-xs font-bold shadow-md flex items-center justify-center gap-1 transition">
+              <span>⬇️</span> SVG
+            </button>
+            <button id="download-webp" class="bg-slate-800 dark:bg-slate-700 text-white hover:bg-slate-900 py-3 px-4 rounded-xl text-xs font-bold shadow-md flex items-center justify-center gap-1 transition">
+              <span>⬇️</span> WEBP
+            </button>
+          </div>
+
+          <!-- Quick Copy Image Button -->
+          <button id="copy-qr-btn" class="w-full mt-2 py-3 px-4 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 transition flex items-center justify-center gap-2">
+            📋 Copy Image to Clipboard
+          </button>
+
+        </div>
+
+        <!-- History Drawer -->
+        <div class="glass-panel p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Recent Saved QR Codes</h3>
+            <button id="clear-history-btn" class="text-xs text-rose-500 hover:underline">Clear All</button>
+          </div>
+
+          <div id="history-empty" class="text-center py-6 text-slate-400 text-xs">
+            No recent QR codes saved yet.
+          </div>
+
+          <div id="history-list" class="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1"></div>
+        </div>
+
+      </div>
+
+    </div>
+    <!-- END SECTION 1: QR Generator App -->
+
+    <!-- SECTION 2: Shop Print Center -->
+    <div id="section-print-app" class="hidden flex flex-col gap-5">
+      
+
+
+
+      <!-- Main Layout Grid (Collapsible Sidebar + Maximized Viewer) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- SIDEBAR: Local Files Explorer -->
+        <div id="print-sidebar-col" class="lg:col-span-4 xl:col-span-3 flex flex-col gap-4">
+          <div class="glass-panel p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-3.5">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <span>📁</span> Document Explorer
+              </h3>
+              <button id="refresh-files-btn" class="p-1.5 px-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[11px] font-semibold transition" title="Refresh root directory">
+                🔄 Refresh
+              </button>
+            </div>
+
+            <div class="text-[11px] text-slate-400 font-mono bg-slate-100 dark:bg-slate-900/80 p-2 rounded-xl border border-slate-200/60 dark:border-slate-800 truncate">
+              Root: <span id="docs-folder-path" class="text-indigo-600 dark:text-indigo-400 font-semibold">C:/Shop_Documents</span>
+            </div>
+
+            <!-- Instant Search Box with Clear Button -->
+            <div class="relative">
+              <input type="text" id="file-search-input" placeholder="Search 44,000+ files, subjects..." class="w-full pl-8 pr-8 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition">
+              <span class="absolute left-2.5 top-2 text-slate-400 text-xs pointer-events-none">🔍</span>
+              <button id="file-search-clear" class="hidden absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs" title="Clear search">✕</button>
+            </div>
+
+            <!-- Dynamic Breadcrumb Navigation Bar -->
+            <div class="flex flex-col gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800">
+              <div class="flex items-center justify-between gap-1.5 min-w-0">
+                <div id="file-breadcrumbs" class="flex items-center flex-wrap gap-1 text-[11px] font-medium overflow-x-auto py-0.5">
+                  <!-- Breadcrumb pills injected dynamically -->
+                </div>
+                <button id="nav-up-btn" class="shrink-0 px-2 py-1 text-[11px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/70 hover:text-indigo-600 dark:hover:text-indigo-400 font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed shadow-sm flex items-center gap-1" title="Go up to parent folder" disabled>
+                  <span>⬆️</span> <span>Up</span>
+                </button>
+              </div>
+
+              <!-- Quick Tree Controls & Stats Bar -->
+              <div class="flex items-center justify-between pt-1.5 border-t border-slate-200/60 dark:border-slate-800/80 text-[11px]">
+                <div class="flex items-center gap-1.5">
+                  <button id="expand-all-btn" class="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium border border-slate-200 dark:border-slate-700 transition" title="Expand loaded folders">
+                    ➕ Expand
+                  </button>
+                  <button id="collapse-all-btn" class="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium border border-slate-200 dark:border-slate-700 transition" title="Collapse all folders">
+                    ➖ Collapse
+                  </button>
+                </div>
+                <span id="file-explorer-stats" class="text-slate-400 text-[10px] font-mono truncate">0 files</span>
+              </div>
+            </div>
+
+            <!-- File Tree List Container (Scrollable) -->
+            <div id="file-tree-container" class="max-h-[calc(100vh-360px)] min-h-[480px] overflow-y-auto pr-1 flex flex-col gap-1 text-xs select-none">
+              <div class="text-slate-400 p-4 text-center">Loading files...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MAIN VIEWER & PRINT CONTROLS -->
+        <div id="print-viewer-col" class="lg:col-span-8 xl:col-span-9 flex flex-col gap-4">
+          
+          <!-- Unified Document & Viewer Card -->
+          <div id="pdf-viewer-main-card" class="glass-panel p-4 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-lg flex flex-col gap-4">
+            
+            <!-- Viewer Top Action Bar -->
+            <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200/70 dark:border-slate-800">
+              
+              <!-- Selected File Meta -->
+              <div class="flex items-center gap-2.5 min-w-0">
+                <span class="text-xl shrink-0">📄</span>
+                <div class="flex flex-col min-w-0">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span id="selected-file-display" class="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-100 truncate max-w-sm sm:max-w-md">No Document Selected</span>
+                    <span id="viewer-pdf-badge" class="hidden text-[10px] px-2 py-0.5 rounded-full font-black uppercase bg-indigo-500 text-white shadow-sm">PDF</span>
+                  </div>
+                  <span id="viewer-file-subtext" class="text-[10px] text-slate-400 truncate">Choose a file from the explorer on the left to preview</span>
+                </div>
+              </div>
+
+              <!-- Quick Viewer Actions: Open in Tab + Maximize / Fullscreen -->
+              <div class="flex items-center gap-2 shrink-0">
+                <button id="open-tab-btn" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Open document in a new browser tab">
+                  <span>↗</span> <span>Open in Tab</span>
+                </button>
+
+                <button id="maximize-viewer-btn" class="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold transition flex items-center gap-1.5 shadow-sm shadow-indigo-600/30" title="Maximize document viewer">
+                  <span id="maximize-icon">⛶</span> <span id="maximize-label">Maximize</span>
+                </button>
+              </div>
+
+            </div>
+
+
+
+            <!-- PDF Viewer Frame Container (Taller & Responsive) -->
+            <div id="pdf-viewer-frame-container" class="rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-inner overflow-hidden h-[calc(100vh-250px)] min-h-[680px] relative bg-slate-100 dark:bg-slate-950 flex flex-col items-center justify-center">
+              
+              <!-- Placeholder State -->
+              <div id="pdf-viewer-placeholder" class="flex flex-col items-center justify-center text-slate-400 p-8 text-center max-w-sm">
+                <div class="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-500 dark:text-indigo-400 flex items-center justify-center text-3xl mb-4 border border-indigo-200/50 dark:border-indigo-800/50 shadow-sm">
+                  📑
+                </div>
+                <h4 class="text-sm font-extrabold text-slate-700 dark:text-slate-200 mb-1">No Document Selected</h4>
+                <p class="text-xs text-slate-400 leading-relaxed mb-4">Click any document or exam subject in the explorer to preview it in high resolution.</p>
+                <div class="text-[11px] p-2 px-3 rounded-lg bg-white/60 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-slate-500 font-mono">
+                  Tip: Use ⛶ Maximize for full-screen inspection
+                </div>
+              </div>
+
+              <!-- Embedded Document Iframe -->
+              <iframe id="pdf-viewer-iframe" class="hidden w-full h-full border-none" title="Document Preview"></iframe>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+    <!-- END SECTION 2: Shop Print Center -->
+
+    <!-- SECTION 3: POS Terminal (Default Main Page) -->
+    <div id="section-pos-app" class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+      <!-- Proactive Backup Reminder Banner -->
+      <div id="pos-backup-reminder-banner" class="hidden col-span-full mb-2 p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/80 flex items-center justify-between text-xs text-amber-800 dark:text-amber-200 shadow-sm animate-pulse">
+        <div class="flex items-center gap-2">
+          <span class="text-base">⚠️</span>
+          <span><strong>Backup Reminder:</strong> It has been over 7 days since your last database backup. Protect your business records!</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="pos-banner-backup-now-btn" class="px-3 py-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold transition shadow-sm">Backup Now</button>
+          <button id="pos-banner-dismiss-btn" class="p-1 text-amber-500 hover:text-amber-700">✕</button>
+        </div>
+      </div>
+  
+
+      
+      <!-- LEFT COLUMN: Product Inventory & Catalog Grid (8 Cols) -->
+      <div class="lg:col-span-8 flex flex-col gap-6">
+        
+        <!-- POS Header & Category Filters -->
+        <div class="glass-panel p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <h2 class="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <span>🛒</span> Product Catalog
+              </h2>
+              <span id="low-stock-alert-badge" class="hidden px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 animate-pulse">0 Low Stock</span>
+              <span id="pos-scanner-status" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Scanner Active
+              </span>
+            </div>
+
+            <div class="flex items-center gap-2 flex-wrap">
+              <input type="text" id="pos-search-input" placeholder="Search name or scan barcode..." class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-indigo-500 outline-none w-48 transition">
+              
+              <button id="open-pos-analytics-btn" class="px-3 py-2 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 text-xs font-bold flex items-center gap-1.5 transition shadow-sm" title="Local Financial & Stock Analytics">
+                <span>📈</span> <span>Analytics</span>
+              </button>
+
+              <button id="open-pos-backup-btn" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center gap-1.5 transition" title="JSON & CSV Backup / Restore">
+                <span>💾</span> <span>Backup</span>
+              </button>
+
+              <button id="open-cam-scanner-btn" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition" title="Scan with Camera">
+                <span>📷</span> <span>Camera</span>
+              </button>
+
+              <button id="open-scanner-config-btn" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition" title="Configure Barcode Scanner Hardware">
+                <span>⚙️</span> <span>Setup</span>
+              </button>
+
+              <button id="open-add-product-btn" class="btn-gradient text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition">
+                <span>➕</span> <span>New Item</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Category Pills -->
+          <div id="pos-category-filters" class="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+            <button data-category="all" class="pos-cat-btn active px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white transition-all shadow-sm">All Items</button>
+            <button data-category="Beverage" class="pos-cat-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Beverages</button>
+            <button data-category="Bakery" class="pos-cat-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Bakery</button>
+            <button data-category="Printing" class="pos-cat-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Printing</button>
+            <button data-category="Electronics" class="pos-cat-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Electronics</button>
+            <button data-category="Supplies" class="pos-cat-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Supplies</button>
+          </div>
+        </div>
+
+        <!-- Product Grid -->
+        <div id="pos-product-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+          <div class="text-slate-400 text-xs p-8 text-center col-span-full">Loading catalog items...</div>
+        </div>
+
+
+      </div>
+
+      <!-- RIGHT COLUMN: Order Cart & Checkout Summary (4 Cols) -->
+      <div class="lg:col-span-4 flex flex-col gap-6 lg:sticky lg:top-24">
+        
+        <!-- Cart Card -->
+        <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xl flex flex-col gap-4">
+          
+          <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+            <h3 class="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <span>🧾</span> Current Order (<span id="pos-cart-count">0</span>)
+            </h3>
+            <button id="pos-clear-cart" class="text-xs text-rose-500 hover:underline font-medium">Clear Cart</button>
+          </div>
+
+          <!-- Itemized Cart List -->
+          <div id="pos-cart-items" class="max-h-64 overflow-y-auto pr-1 flex flex-col gap-2 min-h-[120px]">
+            <div class="text-slate-400 text-xs py-8 text-center">Cart is empty. Click catalog items to add.</div>
+          </div>
+
+          <!-- Order Financial Calculations -->
+          <div class="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex flex-col gap-2 text-xs">
+            <div class="flex items-center justify-between text-slate-600 dark:text-slate-400">
+              <span>Subtotal</span>
+              <span id="pos-subtotal" class="font-mono font-semibold">0.00 DA</span>
+            </div>
+
+            <div class="flex items-center justify-between text-slate-600 dark:text-slate-400">
+              <span class="flex items-center gap-1">
+                <span>Discount (%)</span>
+                <input type="number" id="pos-discount-input" value="0" min="0" max="100" class="w-12 px-1 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-center font-bold text-[11px]">
+              </span>
+              <span id="pos-discount-val" class="font-mono text-emerald-600 font-semibold">-0.00 DA</span>
+            </div>
+
+            <div class="flex items-center justify-between text-base font-extrabold text-slate-900 dark:text-slate-100 pt-2 border-t border-slate-200/80 dark:border-slate-800">
+              <span>Total Due</span>
+              <span id="pos-total" class="font-mono text-indigo-600 dark:text-indigo-400 font-extrabold">0.00 DA</span>
+            </div>
+          </div>
+
+          <!-- Payment Method Selector -->
+          <div class="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex flex-col gap-2">
+            <label class="text-xs font-bold text-slate-600 dark:text-slate-400">Select Payment Method</label>
+            <div class="grid grid-cols-3 gap-2">
+              <button data-method="cash" class="pos-pay-btn selected p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold flex flex-col items-center gap-1 hover:border-indigo-500 transition">
+                <span>💵</span> <span>Cash (Espèces)</span>
+              </button>
+              <button data-method="card" class="pos-pay-btn p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold flex flex-col items-center gap-1 hover:border-indigo-500 transition">
+                <span>💳</span> <span>CIB / Dahabia</span>
+              </button>
+              <button data-method="qr" class="pos-pay-btn p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold flex flex-col items-center gap-1 hover:border-indigo-500 transition">
+                <span>📲</span> <span>BaridiMob / QR</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Dynamic QR Payment Modal Box -->
+          <div id="pos-qr-box" class="hidden p-4 bg-indigo-50 dark:bg-indigo-950/60 rounded-2xl border border-indigo-200 dark:border-indigo-800 flex flex-col items-center text-center gap-2">
+            <p class="text-xs font-bold text-indigo-700 dark:text-indigo-300">Scan QR to Pay <span id="pos-qr-amount-display" class="font-mono font-extrabold text-indigo-600 dark:text-indigo-400">0.00 DA</span></p>
+            <div id="pos-qr-canvas" class="p-3 bg-white rounded-xl shadow-sm border border-indigo-100 flex items-center justify-center"></div>
+            <p class="text-[10px] text-slate-500">BaridiMob • SATIM / CIB • Mobile QR Pay</p>
+          </div>
+
+
+          <!-- Checkout Button -->
+          <button id="pos-checkout-btn" class="btn-gradient w-full py-3 px-4 rounded-xl text-xs font-extrabold text-white shadow-lg flex items-center justify-center gap-2 transition">
+            <span>🧾</span> Complete Checkout & Print Receipt
+          </button>
+
+        </div>
+
+        <!-- POS Sales History Drawer -->
+        <div class="glass-panel p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-3">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+            <span>📊</span> Recent Completed Sales
+          </h3>
+          <div id="pos-sales-history" class="max-h-48 overflow-y-auto pr-1 flex flex-col gap-2 text-xs">
+            <div class="text-slate-400 text-center py-4 text-xs">No recent transactions yet.</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+    <!-- END SECTION 3: POS Terminal -->
+
+  </main>
+
+
+  <!-- Printable Area (Hidden on screen) -->
+  <div id="print-area" class="hidden">
+    <h2 id="print-title" class="text-2xl font-bold mb-4 text-slate-900">QR Code</h2>
+    <div id="print-canvas"></div>
+    <p class="text-sm text-slate-500 mt-4">Generated with Millora</p>
+  </div>
+
+  
+  <!-- MODAL 4: Local Financial & Stock Analytics Dashboard -->
+  <div id="pos-analytics-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-4xl w-full shadow-2xl flex flex-col gap-5 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">📈</span>
+          <div>
+            <h3 class="text-base font-bold text-slate-800 dark:text-slate-100">Local POS Financial & Stock Intelligence</h3>
+            <p class="text-[11px] text-slate-400">100% computed inside your browser from local IndexedDB records</p>
+          </div>
+        </div>
+        <button id="close-pos-analytics-btn" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">✕</button>
+      </div>
+
+      <!-- Time Window Filter Pills -->
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-semibold text-slate-500">Period:</span>
+        <button data-window="today" class="analytics-filter-btn px-3 py-1 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200">Today</button>
+        <button data-window="7days" class="analytics-filter-btn px-3 py-1 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200">Last 7 Days</button>
+        <button data-window="30days" class="analytics-filter-btn active px-3 py-1 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow-sm">Last 30 Days</button>
+        <button data-window="all" class="analytics-filter-btn px-3 py-1 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200">All Time</button>
+      </div>
+
+      <!-- Top KPI Summary Cards -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 flex flex-col">
+          <span class="text-[11px] font-bold text-indigo-500 uppercase tracking-wider">Gross Revenue</span>
+          <span id="analytics-gross-revenue" class="text-xl font-extrabold text-indigo-700 dark:text-indigo-300 font-mono mt-1">0.00 DA</span>
+          <span id="analytics-total-transactions" class="text-[10px] text-slate-400 mt-0.5">0 transactions</span>
+        </div>
+
+        <div class="p-4 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/50 flex flex-col">
+          <span class="text-[11px] font-bold text-emerald-500 uppercase tracking-wider">Net Profit</span>
+          <span id="analytics-net-profit" class="text-xl font-extrabold text-emerald-700 dark:text-emerald-300 font-mono mt-1">0.00 DA</span>
+          <span id="analytics-margin-percent" class="text-[10px] text-emerald-600 font-bold mt-0.5">0.0% margin</span>
+        </div>
+
+        <div class="p-4 rounded-2xl bg-amber-50/60 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-900/50 flex flex-col">
+          <span class="text-[11px] font-bold text-amber-600 uppercase tracking-wider">Inventory COGS</span>
+          <span id="analytics-cogs" class="text-xl font-extrabold text-amber-700 dark:text-amber-300 font-mono mt-1">0.00 DA</span>
+          <span class="text-[10px] text-slate-400 mt-0.5">Total product cost</span>
+        </div>
+
+        <div class="p-4 rounded-2xl bg-purple-50/60 dark:bg-purple-950/40 border border-purple-100 dark:border-purple-900/50 flex flex-col">
+          <span class="text-[11px] font-bold text-purple-600 uppercase tracking-wider">Avg Basket Value</span>
+          <span id="analytics-avg-basket" class="text-xl font-extrabold text-purple-700 dark:text-purple-300 font-mono mt-1">0.00 DA</span>
+          <span id="analytics-items-sold" class="text-[10px] text-slate-400 mt-0.5">0 items sold</span>
+        </div>
+      </div>
+
+      <!-- Two-Column Breakdown: Top Sellers & Low Stock Alerts -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Top Selling Products -->
+        <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 flex flex-col gap-3">
+          <h4 class="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+            <span>🏆</span> <span>Top Selling Products</span>
+          </h4>
+          <div id="analytics-top-sellers-list" class="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1">
+            <span class="text-slate-400 text-xs text-center py-4">No sales recorded yet.</span>
+          </div>
+        </div>
+
+        <!-- Low Stock Alerts -->
+        <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 flex flex-col gap-3">
+          <h4 class="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-between">
+            <span class="flex items-center gap-1.5">
+              <span>⚠️</span> <span>Low Stock & Depletion Alerts</span>
+            </span>
+            <span id="analytics-low-stock-count" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">0 items</span>
+          </h4>
+          <div id="analytics-low-stock-list" class="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1">
+            <span class="text-slate-400 text-xs text-center py-4">All stock levels are optimal.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: Data Safety & Full Local Backup -->
+  <div id="pos-backup-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl flex flex-col gap-5">
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">💾</span>
+          <div>
+            <h3 class="text-base font-bold text-slate-800 dark:text-slate-100">Local Data Safety & Backup</h3>
+            <p class="text-[11px] text-slate-400">Export & restore your offline IndexedDB records</p>
+          </div>
+        </div>
+        <button id="close-pos-backup-btn" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">✕</button>
+      </div>
+
+      <p class="text-xs text-slate-500 dark:text-slate-400">All data is stored directly inside your browser. Export regular backups to protect your business records or transfer to another device.</p>
+
+      <!-- JSON Full Database Backup & Restore -->
+      <div class="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/50 flex flex-col gap-3">
+        <h4 class="text-xs font-bold text-indigo-700 dark:text-indigo-300">Full System Snapshot (JSON)</h4>
+        <p class="text-[11px] text-slate-500">Backs up all products, sales history, sale items, and inventory audit logs into a portable JSON file.</p>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button id="export-json-btn" class="btn-gradient text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5">
+            <span>⬇️</span> <span>Export Database JSON</span>
+          </button>
+          <label class="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-200 text-xs font-bold cursor-pointer transition flex items-center gap-1.5">
+            <span>⬆️</span> <span>Restore from JSON</span>
+            <input type="file" id="import-json-input" accept=".json,application/json" class="hidden">
+          </label>
+        </div>
+      </div>
+
+      <!-- CSV Reporting & Accounting Exports -->
+      <div class="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex flex-col gap-3">
+        <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300">Spreadsheet Reports (CSV)</h4>
+        <p class="text-[11px] text-slate-500">Export clean tabular data ready for Microsoft Excel, Google Sheets, or accounting software.</p>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button id="export-inventory-csv-btn" class="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 text-xs font-bold transition flex items-center gap-1.5">
+            <span>📊</span> <span>Inventory List (CSV)</span>
+          </button>
+          <button id="export-sales-csv-btn" class="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 text-xs font-bold transition flex items-center gap-1.5">
+            <span>📑</span> <span>Sales Register (CSV)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- MODAL 1: Hardware Barcode Scanner Configuration -->
+  <div id="scanner-config-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl flex flex-col gap-5">
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <h3 class="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <span>⚙️</span> Barcode Scanner Hardware Setup
+        </h3>
+        <button id="close-scanner-config-btn" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">✕</button>
+      </div>
+
+      <div class="flex flex-col gap-4 text-xs">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Timing Threshold (ms)</label>
+            <input type="number" id="scanner-threshold-input" value="50" min="15" max="150" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold">
+            <p class="text-[10px] text-slate-400 mt-1">Max interval between chars (50ms recommended for USB/BT barcode guns).</p>
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Min Barcode Length</label>
+            <input type="number" id="scanner-min-len-input" value="4" min="2" max="30" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold">
+            <p class="text-[10px] text-slate-400 mt-1">Ignore rapid keystroke bursts shorter than this length.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Suffix Terminator Key</label>
+            <select id="scanner-suffix-select" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold">
+              <option value="Enter">Enter Key (Default)</option>
+              <option value="Tab">Tab Key</option>
+              <option value="None">None (Timeout based)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Audio Beep on Scan</label>
+            <div class="flex items-center gap-2 pt-1">
+              <input type="checkbox" id="scanner-sound-toggle" checked class="rounded text-indigo-600 w-4 h-4">
+              <span class="font-medium text-slate-600 dark:text-slate-400">Play Beep Sound</span>
+              <button id="test-beep-btn" class="ml-auto px-2 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 text-[11px] font-bold">🔊 Test</button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Mobile QR Host Address (Wi-Fi / LAN)</label>
+          <div class="flex items-center gap-2">
+            <input type="text" id="scanner-host-input" placeholder="http://192.168.1.11:3000" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-xs text-indigo-600 dark:text-indigo-400 font-bold">
+            <button id="detect-host-btn" type="button" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold whitespace-nowrap hover:bg-slate-200 text-xs">🔄 Auto-Detect</button>
+          </div>
+          <p class="text-[10px] text-slate-400 mt-1">This is the address encoded into the QR code so customer smartphones on the same Wi-Fi can open the payment page.</p>
+        </div>
+
+
+        <!-- Live Scanner Test Area -->
+        <div class="p-3 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700">
+          <p class="font-bold text-slate-700 dark:text-slate-300 mb-1">Interactive Hardware Test Area</p>
+          <p class="text-[11px] text-slate-500 mb-2">Scan any physical barcode with your USB/Bluetooth gun now:</p>
+          <div class="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-dashed border-indigo-300 dark:border-indigo-700 font-mono text-center">
+            <span id="scanner-test-output" class="text-indigo-600 dark:text-indigo-400 font-bold">Waiting for barcode gun scan...</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 border-t border-slate-200/60 dark:border-slate-800 pt-3">
+        <button id="save-scanner-config-btn" class="btn-gradient text-white px-5 py-2 rounded-xl text-xs font-bold shadow-md">
+          Save Scanner Settings
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: Add / Edit Product (LocalStorage) -->
+  <div id="pos-product-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl flex flex-col gap-4">
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <h3 id="product-modal-title" class="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <span>➕</span> Add New Product
+        </h3>
+        <button id="close-product-modal-btn" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">✕</button>
+      </div>
+
+      <form id="pos-product-form" class="flex flex-col gap-3 text-xs">
+        <input type="hidden" id="product-form-id">
+
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Product Name</label>
+          <input type="text" id="product-form-name" required placeholder="e.g. Cold Brew Coffee" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Category</label>
+            <select id="product-form-category" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none font-medium">
+              <option value="Beverage">Beverage</option>
+              <option value="Bakery">Bakery</option>
+              <option value="Printing">Printing</option>
+              <option value="Electronics">Electronics</option>
+              <option value="Supplies">Supplies</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Selling Price (DA)</label>
+            <input type="number" id="product-form-price" step="1" min="0" required placeholder="150" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none font-bold">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Cost Price (COGS DA)</label>
+            <input type="number" id="product-form-cost" step="1" min="0" value="0" placeholder="60" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none font-medium" title="Purchase cost for margin computation">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Low Stock Alert Min</label>
+            <input type="number" id="product-form-threshold" min="0" value="10" placeholder="10" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none font-medium">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Stock Count</label>
+            <input type="number" id="product-form-stock" min="0" value="50" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none">
+          </div>
+
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Emoji / Icon</label>
+            <input type="text" id="product-form-icon" value="📦" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none text-center text-lg">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Product Photo URL (Direct Link / Unsplash)</label>
+          <input type="url" id="product-form-image" placeholder="https://images.unsplash.com/photo-..." class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none">
+          <p class="text-[10px] text-slate-400 mt-1">Leave empty to use emoji placeholder.</p>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Barcode / UPC / SKU</label>
+          <div class="flex items-center gap-2">
+            <input type="text" id="product-form-barcode" placeholder="Scan barcode with gun or type digits..." class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono outline-none">
+            <button type="button" id="gen-random-barcode-btn" class="px-2.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold whitespace-nowrap hover:bg-slate-200">🎲 Gen</button>
+          </div>
+        </div>
+
+
+        <div class="flex items-center justify-between border-t border-slate-200/60 dark:border-slate-800 pt-3 mt-1">
+          <button type="button" id="delete-product-btn" class="hidden text-rose-500 hover:underline font-bold">Delete Item</button>
+          <div class="flex items-center gap-2 ml-auto">
+            <button type="submit" class="btn-gradient text-white px-5 py-2 rounded-xl font-bold shadow-md">
+              Save Product
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 3: Camera / Webcam Barcode & QR Scanner -->
+  <div id="camera-scanner-modal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl flex flex-col items-center gap-4 text-center">
+      <div class="w-full flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <h3 class="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <span>📷</span> Camera Barcode & QR Scanner
+        </h3>
+        <button id="close-cam-scanner-btn" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 text-lg">✕</button>
+      </div>
+
+      <div class="relative w-full aspect-video bg-black rounded-2xl overflow-hidden flex items-center justify-center border border-slate-800">
+        <video id="camera-scanner-video" class="w-full h-full object-cover" autoplay playsinline muted></video>
+        <!-- Scanning laser overlay line -->
+        <div class="absolute inset-x-8 top-1/2 h-0.5 bg-rose-500 shadow-[0_0_8px_#f43f5e] animate-pulse"></div>
+      </div>
+
+      <p class="text-xs text-slate-500 dark:text-slate-400">Align the barcode or QR code inside the camera frame to scan automatically.</p>
+    </div>
+  </div>
+
+  <!-- Application Modular Scripts -->
+  <script src="js/app.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/checkoutService.js"></script>
+  <script src="js/analyticsService.js"></script>
+  <script src="js/backupService.js"></script>
+  <script src="js/qr-generator.js"></script>
+  <script src="js/file-browser.js"></script>
+  <script src="js/printing.js"></script>
+  <script src="js/pos.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(reg => {
+          console.log('[PWA] Service Worker registered:', reg.scope);
+        }).catch(err => {
+          console.log('[PWA] Service Worker registration failed:', err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
+

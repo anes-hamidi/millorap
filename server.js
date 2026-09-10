@@ -1,0 +1,42 @@
+const express = require('express');
+const path = require('path');
+const fs = require('fs');
+
+// Load environment variables from .env if present
+try {
+  if (typeof process.loadEnvFile === 'function') {
+    const envPath = path.join(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+      process.loadEnvFile(envPath);
+    }
+  }
+} catch (e) {
+  console.warn('Could not auto-load .env file:', e.message);
+}
+
+const filesRouter = require('./routes/files');
+const posRouter = require('./routes/pos');
+const payRouter = require('./routes/pay');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(express.json());
+
+// SECURITY: Only serve static assets from the public directory
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Mount API Routers
+app.use('/api', filesRouter);
+app.use('/api/pos', posRouter);
+app.use('/', payRouter);
+
+// Start Server
+app.listen(PORT, '0.0.0.0', () => {
+  const ip = posRouter.getLocalIp ? posRouter.getLocalIp() : '127.0.0.1';
+  console.log(`Millora Server running at: http://localhost:${PORT}`);
+  console.log(`Mobile Payment Portal URL: http://${ip}:${PORT}/pay`);
+});
+
+module.exports = app;
