@@ -183,3 +183,4 @@ Debounced Search — 120ms input debounce to prevent UI thread blocking
 Lazy Image Loading — Catalog thumbnails use loading="lazy" and decoding="async"
 Single-Pass Cart Calculations — Optimized aggregation loop for cart totals
 Built with ❤️ for Algerian small businesses and print shops.
+C:\Users\fethi\dzexams_downloaded_pdfs
