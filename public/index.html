@@ -833,12 +833,36 @@
           </div>
 
           <!-- Dynamic QR Payment Modal Box -->
-          <div id="pos-qr-box" class="hidden p-4 bg-indigo-50 dark:bg-indigo-950/60 rounded-2xl border border-indigo-200 dark:border-indigo-800 flex flex-col items-center text-center gap-2">
-            <p class="text-xs font-bold text-indigo-700 dark:text-indigo-300">Scan QR to Pay <span id="pos-qr-amount-display" class="font-mono font-extrabold text-indigo-600 dark:text-indigo-400">0.00 DA</span></p>
-            <div id="pos-qr-canvas" class="p-3 bg-white rounded-xl shadow-sm border border-indigo-100 flex items-center justify-center"></div>
-            <p class="text-[10px] text-slate-500">BaridiMob • SATIM / CIB • Mobile QR Pay</p>
-          </div>
+          <div id="pos-qr-box" class="hidden p-4 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/70 dark:to-purple-950/50 rounded-2xl border border-indigo-200 dark:border-indigo-800 flex flex-col items-center text-center gap-3 shadow-md">
+            <div class="flex items-center justify-between w-full border-b border-indigo-100 dark:border-indigo-900/60 pb-2">
+              <span class="text-xs font-black text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
+                <span>📲</span> Scanner pour Payer
+              </span>
+              <span id="pos-qr-order-ref" class="text-[10px] font-mono text-slate-400 font-bold">DZ-000000</span>
+            </div>
 
+            <p class="text-xs font-bold text-slate-700 dark:text-slate-300">
+              Montant : <span id="pos-qr-amount-display" class="font-mono font-black text-indigo-600 dark:text-indigo-400 text-sm">0.00 DA</span>
+            </p>
+
+            <div id="pos-qr-canvas" class="p-3 bg-white rounded-2xl shadow-md border border-indigo-100 flex items-center justify-center"></div>
+
+            <div id="pos-qr-status" class="px-3 py-1 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-1.5 animate-pulse">
+              <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+              <span>En attente du paiement client...</span>
+            </div>
+
+            <div class="flex items-center gap-2 w-full pt-1">
+              <button id="pos-open-portal-btn" type="button" class="flex-1 py-1.5 px-2 rounded-xl bg-indigo-100 dark:bg-indigo-900/60 hover:bg-indigo-200 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold transition flex items-center justify-center gap-1">
+                <span>↗</span> Ouvrir le Portail
+              </button>
+              <button id="pos-copy-pay-link-btn" type="button" class="py-1.5 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 text-slate-600 dark:text-slate-300 text-[11px] font-bold transition" title="Copier le lien de paiement">
+                📋 Lien
+              </button>
+            </div>
+
+            <p class="text-[10px] text-slate-400">Prise en charge directe : BaridiMob (RIP/QR) • CIB / Edahabia (SATIM)</p>
+          </div>
 
           <!-- Checkout Button -->
           <button id="pos-checkout-btn" class="btn-gradient w-full py-3 px-4 rounded-xl text-xs font-extrabold text-white shadow-lg flex items-center justify-center gap-2 transition">

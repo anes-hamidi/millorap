@@ -497,34 +497,90 @@
     }
   }
 
-  // --- Dynamic QR Payment Display ---
+  // --- Dynamic QR Payment Display with Real-Time Polling ---
+  let paymentPollInterval = null;
+  let activePaymentOrderRef = null;
+  let activePaymentUrl = '';
+
   function renderPosPaymentQr(totalAmount) {
     const qrBox = document.getElementById('pos-qr-box');
     const qrCanvas = document.getElementById('pos-qr-canvas');
     const amountDisp = document.getElementById('pos-qr-amount-display');
+    const orderRefDisp = document.getElementById('pos-qr-order-ref');
+    const statusDisp = document.getElementById('pos-qr-status');
 
     if (!qrBox || !qrCanvas) return;
     qrBox.classList.remove('hidden');
     if (amountDisp) amountDisp.innerText = `${totalAmount.toFixed(2)} DA`;
 
-    const orderRef = 'DZ-' + Date.now().toString().slice(-6);
-    const paymentUrl = `${window.location.origin}/pay?amount=${totalAmount.toFixed(2)}&order=${encodeURIComponent(orderRef)}`;
+    // Maintain consistent order ref until cart is reset or checked out
+    if (!activePaymentOrderRef) {
+      activePaymentOrderRef = 'DZ-' + Date.now().toString().slice(-6);
+    }
+    if (orderRefDisp) orderRefDisp.innerText = activePaymentOrderRef;
+
+    // Use host from scanner configuration if set, otherwise current origin
+    const hostBase = scannerConfig.mobileHost || window.location.origin;
+    activePaymentUrl = `${hostBase}/pay?amount=${totalAmount.toFixed(2)}&order=${encodeURIComponent(activePaymentOrderRef)}`;
 
     qrCanvas.innerHTML = '';
     posQrCode = new QRCodeStyling({
-      width: 160,
-      height: 160,
-      data: paymentUrl,
-      dotsOptions: { color: '#059669', type: 'rounded' },
-      cornersSquareOptions: { color: '#047857', type: 'extra-rounded' },
+      width: 170,
+      height: 170,
+      data: activePaymentUrl,
+      dotsOptions: { color: '#4f46e5', type: 'rounded' },
+      cornersSquareOptions: { color: '#4338ca', type: 'extra-rounded' },
       backgroundOptions: { color: '#ffffff' }
     });
     posQrCode.append(qrCanvas);
+
+    // Reset status display
+    if (statusDisp) {
+      statusDisp.className = 'px-3 py-1 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-1.5 animate-pulse';
+      statusDisp.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span><span>En attente du paiement client...</span>';
+    }
+
+    // Start Real-Time Polling for Mobile / Online Payment Verification
+    if (paymentPollInterval) clearInterval(paymentPollInterval);
+    paymentPollInterval = setInterval(async () => {
+      if (!activePaymentOrderRef || posPaymentMethod !== 'qr') {
+        clearInterval(paymentPollInterval);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/pay/status/${encodeURIComponent(activePaymentOrderRef)}`);
+        const data = await res.json();
+        if (data.paid && data.payment) {
+          clearInterval(paymentPollInterval);
+          paymentPollInterval = null;
+
+          if (statusDisp) {
+            statusDisp.className = 'px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1.5';
+            statusDisp.innerHTML = `<span>✓</span><span>Paiement Reçu (${data.payment.method})!</span>`;
+          }
+
+          playScannerBeep();
+          showToast(`Paiement Validé via ${data.payment.method}! Réf: ${data.payment.authCode}`);
+
+          // Automatically complete POS checkout
+          setTimeout(() => {
+            completePosCheckout();
+          }, 600);
+        }
+      } catch (err) {
+        // Silent poll error (offline)
+      }
+    }, 2500);
   }
 
   function hidePosPaymentQr() {
     const qrBox = document.getElementById('pos-qr-box');
     if (qrBox) qrBox.classList.add('hidden');
+    if (paymentPollInterval) {
+      clearInterval(paymentPollInterval);
+      paymentPollInterval = null;
+    }
   }
 
   // --- Complete Checkout via CheckoutService ---
@@ -555,9 +611,14 @@
         }, 300);
       }
 
-      // Reset cart
+      // Reset cart and active QR payment ref
       posCart = [];
       posDiscountPercent = 0;
+      activePaymentOrderRef = null;
+      if (paymentPollInterval) {
+        clearInterval(paymentPollInterval);
+        paymentPollInterval = null;
+      }
       const discInput = document.getElementById('pos-discount-input');
       if (discInput) discInput.value = 0;
 
@@ -804,6 +865,85 @@
         showToast('Sales Register CSV downloaded');
       } catch (err) {
         showToast('CSV Error: ' + err.message, 'error');
+      }
+    });
+
+    // Mobile QR Payment Actions
+    document.getElementById('pos-open-portal-btn')?.addEventListener('click', () => {
+      if (activePaymentUrl) {
+        window.open(activePaymentUrl, '_blank');
+      }
+    });
+
+    document.getElementById('pos-copy-pay-link-btn')?.addEventListener('click', () => {
+      if (activePaymentUrl) {
+        navigator.clipboard.writeText(activePaymentUrl).then(() => {
+          showToast('Lien de paiement copié dans le presse-papier !');
+        });
+      }
+    });
+
+    // Scanner & Hardware Setup Modal
+    const scannerModal = document.getElementById('scanner-config-modal');
+    document.getElementById('open-scanner-config-btn')?.addEventListener('click', async () => {
+      if (scannerModal) {
+        scannerModal.classList.remove('hidden');
+        document.getElementById('scanner-threshold-input').value = scannerConfig.thresholdMs || 50;
+        document.getElementById('scanner-min-len-input').value = scannerConfig.minLen || 4;
+        document.getElementById('scanner-suffix-select').value = scannerConfig.suffix || 'Enter';
+        document.getElementById('scanner-sound-toggle').checked = scannerConfig.soundEnabled !== false;
+
+        // Auto-detect server IP for host input
+        const hostInput = document.getElementById('scanner-host-input');
+        if (hostInput) {
+          hostInput.value = scannerConfig.mobileHost || '';
+          if (!hostInput.value) {
+            try {
+              const res = await fetch('/api/pos/info');
+              const data = await res.json();
+              if (data.baseUrl) hostInput.value = data.baseUrl;
+            } catch (e) {
+              hostInput.value = window.location.origin;
+            }
+          }
+        }
+      }
+    });
+
+    document.getElementById('close-scanner-config-btn')?.addEventListener('click', () => {
+      scannerModal?.classList.add('hidden');
+    });
+
+    document.getElementById('detect-host-btn')?.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/pos/info');
+        const data = await res.json();
+        const hostInput = document.getElementById('scanner-host-input');
+        if (hostInput && data.baseUrl) {
+          hostInput.value = data.baseUrl;
+          showToast(`Détecté: ${data.baseUrl}`);
+        }
+      } catch (e) {
+        showToast('Detection error: ' + e.message, 'error');
+      }
+    });
+
+    document.getElementById('test-beep-btn')?.addEventListener('click', playScannerBeep);
+
+    document.getElementById('save-scanner-config-btn')?.addEventListener('click', () => {
+      scannerConfig.thresholdMs = parseInt(document.getElementById('scanner-threshold-input').value, 10) || 50;
+      scannerConfig.minLen = parseInt(document.getElementById('scanner-min-len-input').value, 10) || 4;
+      scannerConfig.suffix = document.getElementById('scanner-suffix-select').value;
+      scannerConfig.soundEnabled = document.getElementById('scanner-sound-toggle').checked;
+      scannerConfig.mobileHost = (document.getElementById('scanner-host-input')?.value || '').trim();
+
+      localStorage.setItem('pos_scanner_config', JSON.stringify(scannerConfig));
+      scannerModal?.classList.add('hidden');
+      showToast('Paramètres de caisse & QR enregistrés');
+
+      // Re-render QR with updated host if active
+      if (posPaymentMethod === 'qr' && posCart.length > 0) {
+        renderPosCart();
       }
     });
   }

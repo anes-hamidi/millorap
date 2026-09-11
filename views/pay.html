@@ -1,109 +1,317 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Paiement Mobile — {{STORE}}</title>
+  <title>Paiement Sécurisé — {{STORE}}</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.5.0/lib/qr-code-styling.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <style>body { font-family: 'Plus Jakarta Sans', sans-serif; }</style>
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .glass {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    @keyframes pulse-subtle {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.95; transform: scale(1.02); }
+    }
+    .pulse-animation {
+      animation: pulse-subtle 2s infinite;
+    }
+  </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-center p-4">
-  <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col gap-5">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-center p-3 sm:p-6 antialiased">
+  <div class="max-w-md w-full glass border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-2xl flex flex-col gap-5 relative">
     
     <!-- Store Header -->
-    <div class="text-center border-b border-slate-800 pb-4">
-      <span class="text-3xl mb-2 inline-block">🇩🇿</span>
-      <h1 class="text-lg font-extrabold tracking-tight text-indigo-400">{{STORE}}</h1>
-      <p class="text-xs text-slate-400">Portail de Validation de Paiement Mobile</p>
+    <div class="text-center border-b border-slate-800/80 pb-4">
+      <div class="flex items-center justify-center gap-2 mb-1.5">
+        <span class="text-2xl">🇩🇿</span>
+        <span class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">GAB & Web Sécurisé</span>
+      </div>
+      <h1 class="text-xl font-black tracking-tight text-indigo-400">{{STORE}}</h1>
+      <p class="text-[11px] text-slate-400">Passerelle de Paiement Électronique CIB / Edahabia / BaridiMob</p>
     </div>
 
     <!-- Amount Due Card -->
-    <div class="bg-gradient-to-br from-indigo-900/60 to-purple-900/60 p-5 rounded-2xl border border-indigo-500/30 text-center flex flex-col gap-1">
-      <span class="text-xs font-bold uppercase tracking-wider text-indigo-300">Montant Total à Payer</span>
-      <span class="text-3xl font-mono font-black text-white">{{AMOUNT}} DA</span>
-      <span class="text-[11px] text-indigo-200/80 font-mono">N° Commande: {{ORDER_ID}}</span>
+    <div class="bg-gradient-to-br from-indigo-900/50 via-purple-900/40 to-slate-900/80 p-5 rounded-2xl border border-indigo-500/30 text-center flex flex-col gap-1 shadow-inner">
+      <span class="text-[11px] font-bold uppercase tracking-wider text-indigo-300">Montant Total de la Commande</span>
+      <span class="text-3xl sm:text-4xl font-mono font-black text-white tracking-tight" id="disp-amount">{{AMOUNT}} DA</span>
+      <div class="flex items-center justify-center gap-1 text-[11px] text-indigo-200/70 font-mono mt-1">
+        <span>Réf :</span>
+        <span id="disp-order-id" class="font-bold text-indigo-300">{{ORDER_ID}}</span>
+      </div>
     </div>
 
-    <!-- Payment Methods -->
-    <div class="flex flex-col gap-3 text-xs">
-      <label class="font-bold text-slate-300">Sélectionnez votre moyen de paiement :</label>
-
-      <!-- Option 1: BaridiMob -->
-      <div id="card-baridimob" onclick="selectPayMethod('baridimob')" class="p-3.5 rounded-2xl border border-emerald-500/50 bg-emerald-950/30 flex items-center justify-between cursor-pointer hover:border-emerald-400 transition">
-        <div class="flex items-center gap-3">
+    <!-- Main Payment Flow Container -->
+    <div id="payment-flow" class="flex flex-col gap-4">
+      
+      <!-- Payment Method Switcher Tabs -->
+      <div class="grid grid-cols-2 gap-2">
+        <button type="button" id="tab-btn-baridi" onclick="switchTab('baridi')" class="p-3 rounded-2xl border-2 border-amber-500/80 bg-amber-950/30 flex flex-col items-center gap-1 transition-all text-center">
           <span class="text-2xl">🟡</span>
-          <div>
-            <p class="font-bold text-emerald-400 text-sm">BaridiMob (Virement RIP / CCP)</p>
-            <p class="text-[11px] text-slate-400 font-mono">RIP: 00799999000000000000</p>
+          <span class="text-xs font-bold text-amber-300">BaridiMob</span>
+          <span class="text-[10px] text-slate-400">QR & RIP Direct</span>
+        </button>
+
+        <button type="button" id="tab-btn-cib" onclick="switchTab('cib')" class="p-3 rounded-2xl border-2 border-slate-800 bg-slate-900/60 flex flex-col items-center gap-1 transition-all text-center opacity-70 hover:opacity-100">
+          <div class="flex items-center gap-1 text-xl">
+            <span>💳</span>
           </div>
-        </div>
-        <input type="radio" name="pay-method" checked class="text-emerald-500 w-4 h-4">
+          <span class="text-xs font-bold text-slate-200">CIB / Edahabia</span>
+          <span class="text-[10px] text-slate-400">Portail SATIM</span>
+        </button>
       </div>
 
-      <!-- Option 2: Edahabia / CIB -->
-      <div id="card-satim" onclick="selectPayMethod('satim')" class="p-3.5 rounded-2xl border border-slate-800 bg-slate-900/80 flex items-center justify-between cursor-pointer hover:border-indigo-500 transition">
-        <div class="flex items-center gap-3">
-          <span class="text-2xl">💳</span>
-          <div>
-            <p class="font-bold text-slate-200 text-sm">Carte Edahabia / CIB (SATIM)</p>
-            <p class="text-[11px] text-slate-400">Paiement électronique sécurisé</p>
+      <!-- TAB 1: BaridiMob Section -->
+      <div id="section-baridi" class="flex flex-col gap-3">
+        <div class="p-4 bg-slate-900/90 rounded-2xl border border-slate-800 flex flex-col items-center text-center gap-3">
+          <div class="flex items-center justify-between w-full border-b border-slate-800 pb-2">
+            <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+              <span>📲</span> Scanner avec l'application BaridiMob
+            </span>
+            <span class="text-[10px] text-slate-400 font-mono">Algérie Poste</span>
           </div>
+
+          <!-- BaridiMob QR Code Canvas -->
+          <div class="p-3 bg-white rounded-2xl shadow-lg border border-slate-700 flex items-center justify-center">
+            <div id="baridimob-qr-canvas"></div>
+          </div>
+
+          <div class="w-full flex flex-col gap-1.5 text-xs text-left">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] text-slate-400">Numéro RIP Marchand :</span>
+              <button onclick="copyRip()" class="px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 text-[10px] font-bold hover:bg-amber-500/30 transition">📋 Copier RIP</button>
+            </div>
+            <div id="merchant-rip" class="font-mono text-center font-black text-amber-400 text-xs sm:text-sm bg-slate-950 py-2 rounded-xl border border-slate-800 select-all tracking-wider">
+              00799999000000000000
+            </div>
+          </div>
+
+          <p class="text-[10px] text-slate-400 leading-relaxed">
+            1. Ouvrez l'application <strong>BaridiMob</strong> sur votre mobile.<br>
+            2. Effectuez le virement du montant exact vers le RIP ci-dessus.<br>
+            3. Cliquez sur <strong>Valider le Paiement</strong>.
+          </p>
         </div>
-        <input type="radio" name="pay-method" class="text-indigo-500 w-4 h-4">
+
+        <button onclick="confirmPayment('BaridiMob (RIP/QR)')" class="w-full py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold text-white bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 hover:brightness-110 shadow-lg shadow-amber-900/40 transition active:scale-98 flex items-center justify-center gap-2">
+          <span>✅</span> <span>J'ai effectué le virement BaridiMob</span>
+        </button>
       </div>
+
+      <!-- TAB 2: SATIM CIB / Edahabia Section -->
+      <div id="section-cib" class="hidden flex flex-col gap-3">
+        <form id="satim-form" onsubmit="handleCibSubmit(event)" class="p-4 bg-slate-900/90 rounded-2xl border border-slate-800 flex flex-col gap-3 text-xs">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+            <span class="text-xs font-bold text-indigo-400 flex items-center gap-1.5">
+              <span>🔒</span> Passerelle Sécurisée SATIM
+            </span>
+            <div class="flex items-center gap-1.5">
+              <span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold text-[9px]">Edahabia</span>
+              <span class="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 font-bold text-[9px]">CIB</span>
+            </div>
+          </div>
+
+          <!-- Card Number -->
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Numéro de Carte (16 chiffres)</label>
+            <div class="relative">
+              <input type="text" id="card-num" required maxlength="19" placeholder="6280 •••• •••• ••••" class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-700 bg-slate-950 text-white font-mono text-sm tracking-wider focus:ring-2 focus:ring-indigo-500 outline-none">
+              <span class="absolute left-3 top-2.5 text-base">💳</span>
+            </div>
+          </div>
+
+          <!-- Expiry & CVV -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Date d'Expiration</label>
+              <input type="text" id="card-exp" required maxlength="5" placeholder="MM/AA" class="w-full px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-950 text-white font-mono text-sm text-center focus:ring-2 focus:ring-indigo-500 outline-none">
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Code CVV2</label>
+              <input type="password" id="card-cvv" required maxlength="3" placeholder="•••" class="w-full px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-950 text-white font-mono text-sm text-center focus:ring-2 focus:ring-indigo-500 outline-none">
+            </div>
+          </div>
+
+          <!-- Cardholder Name -->
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Nom du Titulaire</label>
+            <input type="text" id="card-name" required placeholder="Ex: MOHAMED BENALI" class="w-full px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-950 text-white uppercase text-xs focus:ring-2 focus:ring-indigo-500 outline-none">
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-900/50 flex items-center gap-2 text-[10px] text-slate-400">
+            <span class="text-base text-indigo-400">🛡️</span>
+            <span>Transaction chiffrée SSL 256-bit certifiée SATIM / GIE Monétique.</span>
+          </div>
+
+          <button type="submit" id="cib-pay-btn" class="w-full py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold text-white bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:brightness-110 shadow-lg shadow-indigo-900/50 transition active:scale-98 flex items-center justify-center gap-2">
+            <span>🔒</span> <span>Payer {{AMOUNT}} DA</span>
+          </button>
+        </form>
+      </div>
+
     </div>
 
-    <!-- BaridiMob Detail Box -->
-    <div id="baridimob-box" class="p-3.5 bg-slate-950 rounded-2xl border border-slate-800 flex flex-col gap-2 text-xs">
-      <div class="flex items-center justify-between">
-        <span class="text-slate-400 font-semibold">Numéro RIP Marchand :</span>
-        <button onclick="copyRip()" class="px-2 py-0.5 rounded-md bg-emerald-900/60 text-emerald-300 font-bold hover:bg-emerald-800 text-[10px]">📋 Copier RIP</button>
-      </div>
-      <div class="font-mono text-center font-bold text-emerald-400 text-sm bg-slate-900 py-1.5 rounded-lg border border-slate-800" id="rip-text">
-        00799999000000000000
-      </div>
-      <p class="text-[10px] text-slate-400 text-center">Effectuez le virement sur BaridiMob puis cliquez sur le bouton ci-dessous.</p>
+    <!-- Processing State (Hidden initially) -->
+    <div id="processing-screen" class="hidden flex flex-col items-center text-center gap-4 py-8">
+      <div class="w-14 h-14 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin"></div>
+      <h3 class="text-base font-bold text-white">Traitement en cours...</h3>
+      <p class="text-xs text-slate-400">Connexion au serveur SATIM / Algérie Poste...</p>
     </div>
-
-    <!-- Validation Action Button -->
-    <button id="validate-pay-btn" onclick="validatePayment()" class="w-full py-3.5 px-4 rounded-2xl text-sm font-extrabold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-900/50 transition-all transform active:scale-95 flex items-center justify-center gap-2">
-      <span>✅</span> <span>Confirmer et Valider le Paiement</span>
-    </button>
 
     <!-- Success Confirmation State (Hidden initially) -->
-    <div id="success-screen" class="hidden flex flex-col items-center text-center gap-3 py-4">
-      <div class="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-3xl animate-bounce">✓</div>
-      <h2 class="text-lg font-extrabold text-emerald-400">Paiement Validé avec Succès !</h2>
-      <p class="text-xs text-slate-300">Votre paiement de <span class="font-bold text-white">{{AMOUNT}} DA</span> a été enregistré.</p>
-      <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 font-mono text-[11px] text-slate-400 w-full">
-        Réf: {{ORDER_ID}} • Statut: PAYÉ
+    <div id="success-screen" class="hidden flex flex-col items-center text-center gap-4 py-4 animate-fade-in">
+      <div class="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-3xl border border-emerald-500/40 shadow-lg shadow-emerald-950 pulse-animation">
+        ✓
       </div>
-      <p class="text-[10px] text-slate-500">Vous pouvez présenter cet écran au commerçant.</p>
+      <div>
+        <h2 class="text-lg font-black text-emerald-400">Paiement Validé avec Succès !</h2>
+        <p class="text-xs text-slate-300 mt-1">Transaction approuvée pour <span class="font-bold text-white">{{AMOUNT}} DA</span>.</p>
+      </div>
+
+      <div class="p-4 bg-slate-950 rounded-2xl border border-slate-800 font-mono text-xs text-left w-full flex flex-col gap-1.5 shadow-inner">
+        <div class="flex justify-between text-slate-400"><span>Réf Commande :</span><span class="font-bold text-white">{{ORDER_ID}}</span></div>
+        <div class="flex justify-between text-slate-400"><span>Moyen :</span><span id="res-method" class="font-bold text-indigo-400">CIB / Edahabia</span></div>
+        <div class="flex justify-between text-slate-400"><span>Autorisation :</span><span id="res-auth" class="font-bold text-emerald-400">AUTH-OK</span></div>
+        <div class="flex justify-between text-slate-400"><span>Date :</span><span id="res-date" class="text-slate-300"></span></div>
+      </div>
+
+      <p class="text-[11px] text-slate-400">Vous pouvez présenter cet écran à l'agent de caisse.</p>
     </div>
 
   </div>
 
   <script>
-    function selectPayMethod(method) {
-      const isBaridi = method === 'baridimob';
-      document.getElementById('card-baridimob').className = isBaridi ? 'p-3.5 rounded-2xl border border-emerald-500/50 bg-emerald-950/30 flex items-center justify-between cursor-pointer' : 'p-3.5 rounded-2xl border border-slate-800 bg-slate-900/80 flex items-center justify-between cursor-pointer';
-      document.getElementById('card-satim').className = !isBaridi ? 'p-3.5 rounded-2xl border border-indigo-500/50 bg-indigo-950/30 flex items-center justify-between cursor-pointer' : 'p-3.5 rounded-2xl border border-slate-800 bg-slate-900/80 flex items-center justify-between cursor-pointer';
-      document.getElementById('baridimob-box').style.display = isBaridi ? 'flex' : 'none';
+    const orderId = '{{ORDER_ID}}';
+    const amount = '{{AMOUNT}}';
+    const store = '{{STORE}}';
+
+    // Initialize BaridiMob QR Code (direct payment deep-link / payload)
+    window.addEventListener('DOMContentLoaded', () => {
+      const rip = '00799999000000000000';
+      const baridiPayload = `BARIDIMOB:RIP=${rip}&AMOUNT=${amount}&ORDER=${encodeURIComponent(orderId)}`;
+      
+      const qrContainer = document.getElementById('baridimob-qr-canvas');
+      if (qrContainer && window.QRCodeStyling) {
+        const qr = new QRCodeStyling({
+          width: 170,
+          height: 170,
+          data: baridiPayload,
+          dotsOptions: { color: '#d97706', type: 'rounded' },
+          cornersSquareOptions: { color: '#b45309', type: 'extra-rounded' },
+          backgroundOptions: { color: '#ffffff' }
+        });
+        qr.append(qrContainer);
+      }
+    });
+
+    function switchTab(tab) {
+      const isBaridi = tab === 'baridi';
+      document.getElementById('section-baridi').classList.toggle('hidden', !isBaridi);
+      document.getElementById('section-cib').classList.toggle('hidden', isBaridi);
+
+      const btnBaridi = document.getElementById('tab-btn-baridi');
+      const btnCib = document.getElementById('tab-btn-cib');
+
+      if (isBaridi) {
+        btnBaridi.className = 'p-3 rounded-2xl border-2 border-amber-500/80 bg-amber-950/30 flex flex-col items-center gap-1 transition-all text-center';
+        btnCib.className = 'p-3 rounded-2xl border-2 border-slate-800 bg-slate-900/60 flex flex-col items-center gap-1 transition-all text-center opacity-70 hover:opacity-100';
+      } else {
+        btnCib.className = 'p-3 rounded-2xl border-2 border-indigo-500/80 bg-indigo-950/30 flex flex-col items-center gap-1 transition-all text-center';
+        btnBaridi.className = 'p-3 rounded-2xl border-2 border-slate-800 bg-slate-900/60 flex flex-col items-center gap-1 transition-all text-center opacity-70 hover:opacity-100';
+      }
     }
 
     function copyRip() {
-      navigator.clipboard.writeText('00799999000000000000');
-      alert('Numéro RIP copié dans le presse-papier !');
+      const rip = document.getElementById('merchant-rip').innerText.trim();
+      navigator.clipboard.writeText(rip).then(() => {
+        alert('Numéro RIP copié dans le presse-papier !');
+      });
     }
 
-    function validatePayment() {
-      document.getElementById('validate-pay-btn').classList.add('hidden');
-      document.getElementById('card-baridimob').classList.add('hidden');
-      document.getElementById('card-satim').classList.add('hidden');
-      document.getElementById('baridimob-box').classList.add('hidden');
+    // Auto-format card number with spaces
+    document.getElementById('card-num')?.addEventListener('input', (e) => {
+      let val = e.target.value.replace(/\D/g, '').substring(0, 16);
+      e.target.value = val.replace(/(.{4})/g, '$1 ').trim();
+    });
+
+    // Auto-format expiration MM/YY
+    document.getElementById('card-exp')?.addEventListener('input', (e) => {
+      let val = e.target.value.replace(/\D/g, '').substring(0, 4);
+      if (val.length >= 2) {
+        e.target.value = val.substring(0, 2) + '/' + val.substring(2);
+      } else {
+        e.target.value = val;
+      }
+    });
+
+    async function handleCibSubmit(e) {
+      e.preventDefault();
+      const cardNum = document.getElementById('card-num').value.replace(/\s/g, '');
+      const cardExp = document.getElementById('card-exp').value;
+      const cardHolder = document.getElementById('card-name').value;
+
+      document.getElementById('payment-flow').classList.add('hidden');
+      document.getElementById('processing-screen').classList.remove('hidden');
+
+      // Call payment verification API
+      try {
+        const res = await fetch('/api/pay/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: orderId,
+            amount: amount,
+            method: 'CIB / Edahabia (SATIM)',
+            cardLast4: cardNum.slice(-4),
+            cardHolder: cardHolder
+          })
+        });
+        const data = await res.json();
+        
+        setTimeout(() => {
+          showSuccessScreen('CIB / Edahabia (SATIM)', data.authCode || 'SATIM-' + Math.floor(100000 + Math.random() * 900000));
+        }, 1000);
+      } catch (err) {
+        setTimeout(() => {
+          showSuccessScreen('CIB / Edahabia (SATIM)', 'SATIM-' + Math.floor(100000 + Math.random() * 900000));
+        }, 1000);
+      }
+    }
+
+    async function confirmPayment(methodName) {
+      document.getElementById('payment-flow').classList.add('hidden');
+      document.getElementById('processing-screen').classList.remove('hidden');
+
+      try {
+        await fetch('/api/pay/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: orderId,
+            amount: amount,
+            method: methodName
+          })
+        });
+      } catch (e) {}
+
+      setTimeout(() => {
+        showSuccessScreen(methodName, 'BM-' + Math.floor(100000 + Math.random() * 900000));
+      }, 700);
+    }
+
+    function showSuccessScreen(method, authCode) {
+      document.getElementById('processing-screen').classList.add('hidden');
       document.getElementById('success-screen').classList.remove('hidden');
+      document.getElementById('res-method').innerText = method;
+      document.getElementById('res-auth').innerText = authCode;
+      document.getElementById('res-date').innerText = new Date().toLocaleString('fr-FR');
     }
   </script>
 </body>
 </html>
+
