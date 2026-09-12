@@ -1,71 +1,109 @@
 @echo off
-title Millora - Demarrage automatique
+title Millora - Demarrage
 color 0A
-
 echo.
-echo  Millora Print ^& POS - Demarrage
-echo  =====================================
+echo  =========================================
+echo   Millora Print ^& POS - Demarrage
+echo  =========================================
 echo.
 
-:: Kill any existing node or cloudflared
+:: Load .env variables
+for /F "usebackq tokens=1,* delims==" %%A in (".env") do (
+    set "line=%%A"
+    if not "!line:~0,1!"=="#" (
+        set "%%A=%%B"
+    )
+)
+:: Re-load with delayed expansion workaround
+for /F "usebackq tokens=1,* delims==" %%A in (".env") do (
+    echo %%A | findstr /V "^#" >nul 2>&1 && set "%%A=%%B"
+)
+
+setlocal enabledelayedexpansion
+
+:: Re-load .env with delayed expansion active
+for /F "usebackq tokens=1,* delims==" %%A in (".env") do (
+    set "key=%%A"
+    set "val=%%B"
+    set "first=!key:~0,1!"
+    if not "!first!"=="#" if not "!key!"=="" (
+        set "!key!=!val!"
+    )
+)
+
+:: Kill old processes
 echo [1/4] Arret des anciens processus...
 taskkill /F /IM node.exe >nul 2>&1
-taskkill /F /IM cloudflared.exe >nul 2>&1
+taskkill /F /IM ngrok.exe >nul 2>&1
 timeout /t 1 /nobreak >nul
 
-:: Check if cloudflared.exe exists locally or in PATH
-if exist "cloudflared.exe" goto :have_cloudflared
-where cloudflared >nul 2>&1
-if %errorlevel% equ 0 goto :have_cloudflared
-
-echo [!] cloudflared non trouve. Telechargement...
-curl -L -o cloudflared.exe "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
-if %errorlevel% neq 0 (
-    echo [!] Telechargement echoue - mode local uniquement.
-    goto :start_server
+:: Check ngrok exists
+if not exist "ngrok.exe" (
+    echo [!] ngrok.exe non trouve dans ce dossier.
+    echo     Telechargement en cours...
+    powershell -NoProfile -Command "Invoke-WebRequest -Uri 'https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip' -OutFile 'ngrok.zip'; Expand-Archive -Path 'ngrok.zip' -DestinationPath '.' -Force; Remove-Item 'ngrok.zip'"
+    if not exist "ngrok.exe" (
+        echo [!] Telechargement echoue. Mode local uniquement.
+        goto :start_server
+    )
+    echo [OK] ngrok.exe telecharge.
 )
-echo [OK] cloudflared telecharge.
 
-:have_cloudflared
-echo [2/4] Demarrage du tunnel Cloudflare...
-set "TUNNEL_LOG=%TEMP%\millora_tunnel.log"
-if exist cloudflared.exe (
-    start /B cloudflared.exe tunnel --url http://localhost:3000 --no-autoupdate > "%TUNNEL_LOG%" 2>&1
+:: Set auth token
+if defined NGROK_TOKEN (
+    if not "!NGROK_TOKEN!"=="" (
+        echo [2/4] Configuration du token ngrok...
+        .\ngrok.exe config add-authtoken !NGROK_TOKEN! >nul 2>&1
+        echo [OK] Token configure.
+    )
+)
+
+:: Start tunnel
+echo [3/4] Demarrage du tunnel ngrok...
+if defined NGROK_DOMAIN (
+    if not "!NGROK_DOMAIN!"=="" (
+        echo      Mode : Domaine permanent ^(!NGROK_DOMAIN!^)
+        start /B .\ngrok.exe http --domain=!NGROK_DOMAIN! 3000 --log=stdout > "%TEMP%\millora_ngrok.log" 2>&1
+    ) else (
+        echo      Mode : URL aleatoire ^(obtenir un domaine permanent sur dashboard.ngrok.com^)
+        start /B .\ngrok.exe http 3000 --log=stdout > "%TEMP%\millora_ngrok.log" 2>&1
+    )
 ) else (
-    start /B cloudflared tunnel --url http://localhost:3000 --no-autoupdate > "%TUNNEL_LOG%" 2>&1
+    start /B .\ngrok.exe http 3000 --log=stdout > "%TEMP%\millora_ngrok.log" 2>&1
 )
 
-echo [3/4] Detection de l URL publique (jusqu a 20 secondes)...
+:: Wait for ngrok to start and get URL via local API
+echo [4/4] Detection de l URL publique...
 set "PUBLIC_URL="
 for /L %%i in (1,1,20) do (
     timeout /t 1 /nobreak >nul
     if not defined PUBLIC_URL (
-        for /F "delims=" %%U in ('powershell -NoProfile -Command "try { $t = Get-Content \"%TUNNEL_LOG%\" -ErrorAction Stop; $m = ($t -join ' ') | Select-String 'https://[a-z0-9-]+\.trycloudflare\.com'; if ($m) { $m.Matches[0].Value } } catch {}"') do (
+        for /F "delims=" %%U in ('powershell -NoProfile -Command "try { $r = Invoke-RestMethod http://localhost:4040/api/tunnels -ErrorAction Stop; $r.tunnels[0].public_url } catch {}"') do (
             if not "%%U"=="" set "PUBLIC_URL=%%U"
         )
     )
 )
 
 if not defined PUBLIC_URL (
-    echo [!] Tunnel non detecte - demarrage en mode local Wi-Fi.
-    powershell -NoProfile -Command "$c = Get-Content '.env' -Raw; $c = $c -replace '(?m)^PUBLIC_URL=.*\r?\n?',''; Set-Content '.env' $c.Trim()"
+    echo [!] ngrok non demarre. Mode local Wi-Fi uniquement.
+    powershell -NoProfile -Command "$c = (Get-Content '.env' -Raw) -replace '(?m)^PUBLIC_URL=.*(\r?\n)?',''; Set-Content '.env' $c.TrimEnd()"
     goto :start_server
 )
 
-echo [OK] URL publique : %PUBLIC_URL%
-echo [4/4] Mise a jour de .env ...
-powershell -NoProfile -Command "$c = Get-Content '.env' -Raw; if ($c -match '(?m)^PUBLIC_URL=') { $c = $c -replace '(?m)^PUBLIC_URL=.*', 'PUBLIC_URL=%PUBLIC_URL%' } else { $c = $c.TrimEnd() + [Environment]::NewLine + 'PUBLIC_URL=%PUBLIC_URL%' }; Set-Content '.env' $c.TrimEnd()"
-echo [OK] .env mis a jour.
+echo [OK] URL publique : !PUBLIC_URL!
+
+:: Save URL to .env
+powershell -NoProfile -Command "$url = '!PUBLIC_URL!'; $c = Get-Content '.env' -Raw; if ($c -match '(?m)^PUBLIC_URL=') { $c = $c -replace '(?m)^PUBLIC_URL=.*', \"PUBLIC_URL=$url\" } else { $c = $c.TrimEnd() + [Environment]::NewLine + \"PUBLIC_URL=$url\" }; Set-Content '.env' $c.TrimEnd()"
 
 echo.
-echo  +-------------------------------------------------+
-echo  ^| URL Publique (QR Mobile) :                      ^|
-echo  ^| %PUBLIC_URL%
-echo  +-------------------------------------------------+
+echo  +--------------------------------------------------+
+echo  ^|  URL PUBLIQUE (QR Code Mobile) :                 ^|
+echo  ^|  !PUBLIC_URL!
+echo  +--------------------------------------------------+
 echo.
 
 :start_server
-echo  Demarrage Millora sur http://localhost:3000 ...
+echo  Millora demarre sur http://localhost:3000
 echo  Ctrl+C pour arreter.
 echo.
 node server.js
