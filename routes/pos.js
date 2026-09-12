@@ -193,7 +193,11 @@ router.get('/history', async (req, res) => {
 router.get('/info', (req, res) => {
   const ip = getLocalIp();
   const port = process.env.PORT || 3000;
-  res.json({ success: true, ip, port, baseUrl: `http://${ip}:${port}` });
+  // If PUBLIC_URL is set (e.g. Cloudflare Tunnel), use it for QR codes
+  const baseUrl = process.env.PUBLIC_URL
+    ? process.env.PUBLIC_URL.replace(/\/$/, '')
+    : `http://${ip}:${port}`;
+  res.json({ success: true, ip, port, baseUrl });
 });
 
 module.exports = router;
