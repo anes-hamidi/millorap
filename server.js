@@ -17,6 +17,7 @@ try {
 const filesRouter = require('./routes/files');
 const posRouter = require('./routes/pos');
 const payRouter = require('./routes/pay');
+const transferRouter = require('./routes/transfer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,6 +31,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Mount API Routers
 app.use('/api', filesRouter);
 app.use('/api/pos', posRouter);
+app.use('/api', transferRouter);
+app.use('/', transferRouter);
 app.use('/', payRouter);
 
 // Start Server
@@ -37,6 +40,7 @@ app.listen(PORT, '0.0.0.0', () => {
   const ip = posRouter.getLocalIp ? posRouter.getLocalIp() : '127.0.0.1';
   console.log(`Millora Server running at: http://localhost:${PORT}`);
   console.log(`Mobile Payment Portal URL: http://${ip}:${PORT}/pay`);
+  console.log(`Mobile File Transfer URL: http://${ip}:${PORT}/transfer`);
 });
 
 module.exports = app;

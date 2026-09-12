@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Envoyer des Fichiers vers PC — {{STORE}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .glass {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    @keyframes pulse-subtle {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.95; transform: scale(1.02); }
+    }
+    .pulse-animation {
+      animation: pulse-subtle 2s infinite;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-center p-4 antialiased">
+  <div class="max-w-md w-full glass border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-2xl flex flex-col gap-5 relative">
+    
+    <!-- Header -->
+    <div class="text-center border-b border-slate-800/80 pb-4">
+      <div class="flex items-center justify-center gap-2 mb-1.5">
+        <span class="text-2xl">📲</span>
+        <span class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-950/80 text-indigo-400 border border-indigo-800/60">Transfert Direct Mobile ➔ PC</span>
+      </div>
+      <h1 class="text-xl font-black tracking-tight text-indigo-400">{{STORE}}</h1>
+      <p class="text-[11px] text-slate-400">Envoyez vos documents, examens ou photos directement à la caisse</p>
+    </div>
+
+    <!-- Session Badge -->
+    <div class="p-3 bg-slate-900/90 rounded-2xl border border-slate-800 flex items-center justify-between text-xs">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span class="font-bold text-slate-200">Connecté au PC Caisse</span>
+      </div>
+      <span class="font-mono text-[11px] text-indigo-400 font-extrabold" id="session-code">{{SESSION_ID}}</span>
+    </div>
+
+    <!-- Upload Form Screen -->
+    <div id="upload-screen" class="flex flex-col gap-4">
+      
+      <!-- Drag & Drop / File Select Zone -->
+      <label for="mobile-file-input" class="p-6 border-2 border-dashed border-indigo-500/50 hover:border-indigo-400 bg-indigo-950/20 hover:bg-indigo-950/30 rounded-3xl flex flex-col items-center justify-center gap-3 cursor-pointer transition text-center group">
+        <div class="w-14 h-14 rounded-2xl bg-indigo-600/20 text-indigo-400 group-hover:scale-110 flex items-center justify-center text-3xl transition">
+          📤
+        </div>
+        <div>
+          <p class="text-sm font-bold text-white">Sélectionnez vos fichiers</p>
+          <p class="text-[11px] text-slate-400 mt-0.5">PDF, Photos, Scans, Documents (Jusqu'à 200 MB)</p>
+        </div>
+        <span class="px-3 py-1 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow-md shadow-indigo-600/30">
+          Parcourir mes fichiers
+        </span>
+        <input type="file" id="mobile-file-input" multiple class="hidden">
+      </label>
+
+      <!-- Selected Files Preview List -->
+      <div id="file-list-card" class="hidden flex flex-col gap-2">
+        <div class="flex items-center justify-between text-xs font-bold text-slate-300">
+          <span>Fichiers prêts (<span id="selected-count">0</span>) :</span>
+          <button type="button" onclick="clearSelectedFiles()" class="text-rose-400 hover:underline text-[11px]">Effacer</button>
+        </div>
+        <div id="file-queue-container" class="max-h-40 overflow-y-auto p-2 bg-slate-900 rounded-2xl border border-slate-800 flex flex-col gap-1.5 text-xs"></div>
+      </div>
+
+      <!-- Action Button -->
+      <button id="send-files-btn" onclick="uploadFiles()" disabled class="w-full py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold text-white bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:brightness-110 shadow-lg shadow-indigo-900/50 transition active:scale-98 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+        <span>⚡</span> <span>Envoyer au PC de la Caisse</span>
+      </button>
+
+    </div>
+
+    <!-- Progress State (Hidden initially) -->
+    <div id="progress-screen" class="hidden flex flex-col items-center text-center gap-4 py-6">
+      <div class="w-16 h-16 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin"></div>
+      <div>
+        <h3 class="text-base font-bold text-white">Envoi en cours vers le PC...</h3>
+        <p class="text-xs text-slate-400 mt-1" id="progress-status-text">Transfert direct P2P...</p>
+      </div>
+      <div class="w-full bg-slate-800 rounded-full h-3 overflow-hidden p-0.5 border border-slate-700">
+        <div id="upload-progress-bar" class="bg-indigo-600 h-full rounded-full transition-all duration-200" style="width: 0%"></div>
+      </div>
+      <span class="font-mono text-xs font-bold text-indigo-400" id="progress-percent">0%</span>
+    </div>
+
+    <!-- Success Screen (Hidden initially) -->
+    <div id="success-screen" class="hidden flex flex-col items-center text-center gap-4 py-4 animate-fade-in">
+      <div class="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-3xl border border-emerald-500/40 shadow-lg shadow-emerald-950 pulse-animation">
+        ✓
+      </div>
+      <div>
+        <h2 class="text-lg font-black text-emerald-400">Fichiers Reçus sur le PC !</h2>
+        <p class="text-xs text-slate-300 mt-1">Vos documents sont maintenant ouverts et prêts à imprimer à la caisse.</p>
+      </div>
+
+      <div class="p-3 bg-slate-950 rounded-2xl border border-slate-800 font-mono text-xs text-left w-full flex flex-col gap-1.5 shadow-inner">
+        <div class="flex justify-between text-slate-400"><span>Nombre :</span><span id="res-count" class="font-bold text-white">1</span></div>
+        <div class="flex justify-between text-slate-400"><span>Dossier PC :</span><span class="font-bold text-indigo-400">📁 uploads/</span></div>
+        <div class="flex justify-between text-slate-400"><span>Heure :</span><span id="res-time" class="text-slate-300"></span></div>
+      </div>
+
+      <button onclick="resetUploadForm()" class="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition">
+        Envoyer d'autres fichiers
+      </button>
+    </div>
+
+  </div>
+
+  <script>
+    const sessionId = '{{SESSION_ID}}';
+    let fileQueue = [];
+
+    const fileInput = document.getElementById('mobile-file-input');
+    const sendBtn = document.getElementById('send-files-btn');
+    const listCard = document.getElementById('file-list-card');
+    const queueContainer = document.getElementById('file-queue-container');
+    const countSpan = document.getElementById('selected-count');
+
+    fileInput.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files);
+      if (files.length === 0) return;
+      fileQueue.push(...files);
+      updateQueueUI();
+      fileInput.value = '';
+    });
+
+    function updateQueueUI() {
+      if (fileQueue.length === 0) {
+        listCard.classList.add('hidden');
+        sendBtn.disabled = true;
+        return;
+      }
+
+      listCard.classList.remove('hidden');
+      sendBtn.disabled = false;
+      countSpan.innerText = fileQueue.length;
+
+      queueContainer.innerHTML = fileQueue.map((f, i) => `
+        <div class="flex items-center justify-between p-2 rounded-xl bg-slate-950 border border-slate-800">
+          <div class="flex items-center gap-2 min-w-0 truncate">
+            <span class="text-sm">${f.name.toLowerCase().endsWith('.pdf') ? '📕' : '📄'}</span>
+            <span class="truncate font-medium text-slate-200">${escapeHtml(f.name)}</span>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="font-mono text-[10px] text-slate-400">${(f.size / (1024 * 1024)).toFixed(2)} MB</span>
+            <button type="button" onclick="removeQueueItem(${i})" class="text-rose-500 font-bold px-1 hover:text-rose-400">✕</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function removeQueueItem(idx) {
+      fileQueue.splice(idx, 1);
+      updateQueueUI();
+    }
+
+    function clearSelectedFiles() {
+      fileQueue = [];
+      updateQueueUI();
+    }
+
+    function escapeHtml(str) {
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    async function uploadFiles() {
+      if (fileQueue.length === 0) return;
+
+      document.getElementById('upload-screen').classList.add('hidden');
+      document.getElementById('progress-screen').classList.remove('hidden');
+
+      const formData = new FormData();
+      formData.append('sessionId', sessionId);
+      fileQueue.forEach(f => {
+        formData.append('files', f, f.name);
+      });
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/transfer/upload', true);
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          document.getElementById('upload-progress-bar').style.width = percent + '%';
+          document.getElementById('progress-percent').innerText = percent + '%';
+          document.getElementById('progress-status-text').innerText = `${(e.loaded / (1024*1024)).toFixed(1)} MB / ${(e.total / (1024*1024)).toFixed(1)} MB`;
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          document.getElementById('progress-screen').classList.add('hidden');
+          document.getElementById('success-screen').classList.remove('hidden');
+          document.getElementById('res-count').innerText = `${fileQueue.length} fichier(s)`;
+          document.getElementById('res-time').innerText = new Date().toLocaleTimeString('fr-FR');
+          fileQueue = [];
+        } else {
+          alert('Erreur lors du transfert : ' + xhr.statusText);
+          resetUploadForm();
+        }
+      };
+
+      xhr.onerror = () => {
+        alert('Erreur réseau lors de la transmission.');
+        resetUploadForm();
+      };
+
+      xhr.send(formData);
+    }
+
+    function resetUploadForm() {
+      document.getElementById('progress-screen').classList.add('hidden');
+      document.getElementById('success-screen').classList.add('hidden');
+      document.getElementById('upload-screen').classList.remove('hidden');
+      fileQueue = [];
+      updateQueueUI();
+    }
+  </script>
+</body>
+</html>

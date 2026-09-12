@@ -34,9 +34,27 @@ if (!fs.existsSync(EFFECTIVE_DOCS_DIR)) {
   } catch (e) {}
 }
 
+const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  try {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  } catch (e) {}
+}
+
 // Security check helper to prevent path traversal
 function getSafePath(relativePath) {
   const safeRelativePath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, '');
+
+  // If path refers to uploads folder or subfolder
+  if (safeRelativePath === 'uploads' || safeRelativePath.startsWith('uploads/') || safeRelativePath.startsWith('uploads\\')) {
+    const sub = safeRelativePath.replace(/^uploads[\/\\]?/, '');
+    const fullPath = path.join(UPLOADS_DIR, sub);
+    if (!fullPath.startsWith(path.resolve(UPLOADS_DIR))) {
+      throw new Error('Access denied: Invalid path traversal attempt');
+    }
+    return fullPath;
+  }
+
   const fullPath = path.join(EFFECTIVE_DOCS_DIR, safeRelativePath);
   if (!fullPath.startsWith(path.resolve(EFFECTIVE_DOCS_DIR))) {
     throw new Error('Access denied: Invalid path traversal attempt');
@@ -98,7 +116,25 @@ router.get('/files', (req, res) => {
   try {
     const relPath = (req.query.path || '').trim();
     const fullPath = getSafePath(relPath);
-    const items = scanDirectoryShallow(fullPath, relPath);
+    let items = scanDirectoryShallow(fullPath, relPath);
+
+    // If at root folder, always include the dedicated unique 'uploads' directory at top
+    if (!relPath) {
+      let uploadFilesCount = 0;
+      try {
+        uploadFilesCount = fs.readdirSync(UPLOADS_DIR).length;
+      } catch (e) {}
+
+      // Prepend uploads folder with unique styling flag
+      items.unshift({
+        name: 'uploads (Fichiers Reçus Mobile)',
+        type: 'folder',
+        path: 'uploads',
+        isUploads: true,
+        itemCount: uploadFilesCount
+      });
+    }
+
     res.json({ success: true, docsDir: EFFECTIVE_DOCS_DIR, path: relPath, items });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

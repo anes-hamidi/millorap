@@ -915,6 +915,152 @@
     document.getElementById('merge-save-btn')?.addEventListener('click', () => executeMerge('save'));
     document.getElementById('merge-download-btn')?.addEventListener('click', () => executeMerge('download'));
     document.getElementById('merge-print-btn')?.addEventListener('click', () => executeMerge('print'));
+
+    // Mobile File Receiver Modal Controls
+    setupTransferReceiverControls();
+  }
+
+  // --- Mobile-to-PC File Receiver via QR Code ---
+  let transferPollInterval = null;
+  let activeTransferSession = null;
+  let activeTransferUrl = '';
+  let transferQrInstance = null;
+
+  function setupTransferReceiverControls() {
+    const modal = document.getElementById('file-transfer-modal');
+    const openBtn = document.getElementById('open-transfer-modal-btn');
+    const closeBtn = document.getElementById('close-transfer-modal-btn');
+    const openPortalBtn = document.getElementById('transfer-open-portal-btn');
+
+    openBtn?.addEventListener('click', openTransferReceiverModal);
+    closeBtn?.addEventListener('click', closeTransferReceiverModal);
+
+    openPortalBtn?.addEventListener('click', () => {
+      if (activeTransferUrl) {
+        window.open(activeTransferUrl, '_blank');
+      }
+    });
+  }
+
+  async function openTransferReceiverModal() {
+    const modal = document.getElementById('file-transfer-modal');
+    const qrCanvas = document.getElementById('transfer-qr-canvas');
+    const statusText = document.getElementById('transfer-status-text');
+    const statusBadge = document.getElementById('transfer-status-badge');
+    const receivedBox = document.getElementById('transfer-received-box');
+    const receivedList = document.getElementById('transfer-received-list');
+    const receivedCount = document.getElementById('transfer-received-count');
+
+    if (!modal || !qrCanvas) return;
+
+    modal.classList.remove('hidden');
+    if (receivedBox) receivedBox.classList.add('hidden');
+    if (receivedList) receivedList.innerHTML = '';
+    if (receivedCount) receivedCount.innerText = '0';
+
+    if (statusBadge) {
+      statusBadge.className = 'px-4 py-1.5 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-2 animate-pulse';
+    }
+    if (statusText) statusText.innerText = 'En attente de connexion du téléphone...';
+
+    // Generate unique session id
+    activeTransferSession = 'TR-' + Date.now().toString().slice(-6);
+
+    // Resolve host address for QR code
+    let baseOrigin = window.location.origin;
+    try {
+      const res = await fetch('/api/pos/info');
+      const data = await res.json();
+      if (data.baseUrl) baseOrigin = data.baseUrl;
+    } catch (e) {}
+
+    activeTransferUrl = `${baseOrigin}/transfer?session=${encodeURIComponent(activeTransferSession)}`;
+
+    // Render transfer connection QR
+    qrCanvas.innerHTML = '';
+    transferQrInstance = new QRCodeStyling({
+      width: 190,
+      height: 190,
+      data: activeTransferUrl,
+      dotsOptions: { color: '#4338ca', type: 'rounded' },
+      cornersSquareOptions: { color: '#3730a3', type: 'extra-rounded' },
+      backgroundOptions: { color: '#ffffff' }
+    });
+    transferQrInstance.append(qrCanvas);
+
+    // Start Real-Time Receiver Polling for incoming files from mobile
+    if (transferPollInterval) clearInterval(transferPollInterval);
+    transferPollInterval = setInterval(async () => {
+      if (!activeTransferSession) {
+        clearInterval(transferPollInterval);
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/transfer/status/${encodeURIComponent(activeTransferSession)}`);
+        const data = await res.json();
+
+        if (data.success && data.hasFiles && data.files.length > 0) {
+          handleReceivedMobileFiles(data.files);
+        }
+      } catch (err) {}
+    }, 2000);
+  }
+
+  async function handleReceivedMobileFiles(files) {
+    const statusText = document.getElementById('transfer-status-text');
+    const statusBadge = document.getElementById('transfer-status-badge');
+    const receivedBox = document.getElementById('transfer-received-box');
+    const receivedList = document.getElementById('transfer-received-list');
+    const receivedCount = document.getElementById('transfer-received-count');
+
+    if (statusBadge) {
+      statusBadge.className = 'px-4 py-1.5 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 flex items-center gap-2';
+    }
+    if (statusText) statusText.innerText = `Reçu ${files.length} nouveau(x) fichier(s) !`;
+
+    if (receivedBox) receivedBox.classList.remove('hidden');
+    if (receivedCount) receivedCount.innerText = files.length;
+
+    if (receivedList) {
+      files.forEach(f => {
+        const row = document.createElement('div');
+        row.className = 'p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between';
+        row.innerHTML = `
+          <div class="flex items-center gap-1.5 truncate min-w-0">
+            <span>${f.isPdf ? '📕' : '📄'}</span>
+            <span class="font-bold text-slate-800 dark:text-slate-200 truncate">${window.escapeHtml(f.originalName || f.name)}</span>
+          </div>
+          <span class="text-[10px] font-mono text-indigo-500 font-bold ml-2 shrink-0">${f.sizeMB} MB</span>
+        `;
+        receivedList.appendChild(row);
+      });
+    }
+
+    window.showToast(`Reçu ${files.length} document(s) dans uploads/ !`);
+
+    // Invalidate and refresh loaded folders so 'uploads' folder updates live
+    loadedFolders.delete('');
+    loadedFolders.delete('uploads');
+    await fetchFolderItems('');
+    await fetchFolderItems('uploads');
+    renderShopTree();
+
+    // Automatically load the first received document in the main viewer
+    if (files.length > 0) {
+      const first = files[0];
+      setTimeout(async () => {
+        await selectShopFile(first.path);
+      }, 500);
+    }
+  }
+
+  function closeTransferReceiverModal() {
+    document.getElementById('file-transfer-modal')?.classList.add('hidden');
+    if (transferPollInterval) {
+      clearInterval(transferPollInterval);
+      transferPollInterval = null;
+    }
   }
 
   // Export FileBrowser module API
@@ -928,7 +1074,8 @@
     openMergeModal: openMergeModal,
     moveMergeItem: moveMergeItem,
     removeMergeItem: removeMergeItem,
-    clearSelection: clearAllSelectedFiles
+    clearSelection: clearAllSelectedFiles,
+    openTransferReceiver: openTransferReceiverModal
   };
   window.selectShopFile = selectShopFile;
 })();
