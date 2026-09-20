@@ -6,7 +6,8 @@
     const select = document.getElementById('printer-select');
     if (!select) return;
     try {
-      const res = await fetch('/api/printers');
+      const endpoint = window.apiUrl ? window.apiUrl('/api/printers') : '/api/printers';
+      const res = await fetch(endpoint);
       const data = await res.json();
       if (data.printers && data.printers.length > 0) {
         select.innerHTML = '<option value="">Default Windows Printer</option>';
@@ -37,7 +38,7 @@
       showToast('Select a document first!', 'error');
       return;
     }
-    const docUrl = `/api/view?file=${encodeURIComponent(activeFile)}`;
+    const docUrl = window.apiUrl ? window.apiUrl(`/api/view?file=${encodeURIComponent(activeFile)}`) : `/api/view?file=${encodeURIComponent(activeFile)}`;
     window.open(docUrl, '_blank');
   });
 

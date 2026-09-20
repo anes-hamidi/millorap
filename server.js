@@ -25,6 +25,17 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(express.json());
 
+// Enable CORS for Tauri desktop app & LAN requests
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 // SECURITY: Only serve static assets from the public directory
 app.use(express.static(path.join(__dirname, 'public')));
 

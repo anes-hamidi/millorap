@@ -29,7 +29,23 @@
 
     loadingFolders.add(folderPath);
     try {
-      const res = await fetch(`/api/files?path=${encodeURIComponent(folderPath)}`);
+      // 1. Try Tauri native invoke if available
+      if (window.__TAURI__?.core?.invoke) {
+        try {
+          const tauriItems = await window.__TAURI__.core.invoke('list_documents', { relPath: folderPath });
+          if (Array.isArray(tauriItems)) {
+            loadedFolders.set(folderPath, tauriItems);
+            loadingFolders.delete(folderPath);
+            return tauriItems;
+          }
+        } catch (tauriErr) {
+          console.warn('Tauri native list_documents error, trying HTTP:', tauriErr);
+        }
+      }
+
+      // 2. HTTP Fallback
+      const endpoint = window.apiUrl ? window.apiUrl(`/api/files?path=${encodeURIComponent(folderPath)}`) : `/api/files?path=${encodeURIComponent(folderPath)}`;
+      const res = await fetch(endpoint);
       if (!res.ok) throw new Error('API server error');
       const data = await res.json();
       
@@ -666,8 +682,9 @@
     }
 
     try {
+      const mergeEndpoint = window.apiUrl ? window.apiUrl('/api/merge') : '/api/merge';
       if (actionType === 'save') {
-        const res = await fetch('/api/merge', {
+        const res = await fetch(mergeEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -695,7 +712,7 @@
         }
 
       } else if (actionType === 'download') {
-        const res = await fetch('/api/merge', {
+        const res = await fetch(mergeEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -725,7 +742,7 @@
 
       } else if (actionType === 'print') {
         // Fetch merged file as blob and load into iframe or new tab to print
-        const res = await fetch('/api/merge', {
+        const res = await fetch(mergeEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -895,7 +912,22 @@
 
       searchTimeout = setTimeout(async () => {
         try {
-          const res = await fetch(`/api/files/search?q=${encodeURIComponent(term)}`);
+          if (window.__TAURI__?.core?.invoke) {
+            try {
+              const tauriResults = await window.__TAURI__.core.invoke('search_documents', { query: term });
+              if (Array.isArray(tauriResults)) {
+                searchResults = tauriResults;
+                renderShopTree();
+                renderBreadcrumbs();
+                return;
+              }
+            } catch (tErr) {
+              console.warn('Tauri search error, falling back:', tErr);
+            }
+          }
+
+          const endpoint = window.apiUrl ? window.apiUrl(`/api/files/search?q=${encodeURIComponent(term)}`) : `/api/files/search?q=${encodeURIComponent(term)}`;
+          const res = await fetch(endpoint);
           const data = await res.json();
           searchResults = data.results || [];
           renderShopTree();
@@ -1014,7 +1046,8 @@
     // Resolve host address for QR code
     let baseOrigin = window.location.origin;
     try {
-      const res = await fetch('/api/pos/info');
+      const infoEndpoint = window.apiUrl ? window.apiUrl('/api/pos/info') : '/api/pos/info';
+      const res = await fetch(infoEndpoint);
       const data = await res.json();
       if (data.baseUrl) baseOrigin = data.baseUrl;
     } catch (e) {}
@@ -1042,7 +1075,8 @@
       }
 
       try {
-        const res = await fetch(`/api/transfer/status/${encodeURIComponent(activeTransferSession)}`);
+        const pollEndpoint = window.apiUrl ? window.apiUrl(`/api/transfer/status/${encodeURIComponent(activeTransferSession)}`) : `/api/transfer/status/${encodeURIComponent(activeTransferSession)}`;
+        const res = await fetch(pollEndpoint);
         const data = await res.json();
 
         if (data.success && data.hasFiles && data.files.length > 0) {

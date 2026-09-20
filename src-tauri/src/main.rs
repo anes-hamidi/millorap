@@ -72,13 +72,48 @@ fn resolve_safe_path(base_dir: &Path, rel_path: &str) -> Result<PathBuf, String>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// EFFECTIVE DOCUMENTS DIRECTORY RESOLVER
+// ─────────────────────────────────────────────────────────────────────────────
+fn get_effective_docs_dir(docs_dir: Option<String>) -> PathBuf {
+    if let Some(dir) = docs_dir {
+        let p = PathBuf::from(&dir);
+        if p.exists() {
+            return p;
+        }
+    }
+
+    let candidates = [
+        PathBuf::from("./dzexams_downloaded_pdfs"),
+        PathBuf::from("../dzexams_downloaded_pdfs"),
+    ];
+
+    for c in &candidates {
+        if c.exists() {
+            return c.clone();
+        }
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            let p = parent.join("dzexams_downloaded_pdfs");
+            if p.exists() {
+                return p;
+            }
+        }
+    }
+
+    let default_p = PathBuf::from("./dzexams_downloaded_pdfs");
+    let _ = fs::create_dir_all(&default_p);
+    default_p
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // TAURI COMMANDS: FILESYSTEM & DOCUMENT MANAGEMENT
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[tauri::command]
 fn list_documents(docs_dir: Option<String>, rel_path: Option<String>) -> Result<Vec<FileEntry>, String> {
-    let base_str = docs_dir.unwrap_or_else(|| "./dzexams_downloaded_pdfs".to_string());
-    let base_path = PathBuf::from(&base_str);
+    let base_path = get_effective_docs_dir(docs_dir);
 
     if !base_path.exists() {
         let _ = fs::create_dir_all(&base_path);
@@ -150,8 +185,7 @@ fn search_documents(docs_dir: Option<String>, query: String) -> Result<Vec<Searc
         return Ok(Vec::new());
     }
 
-    let base_str = docs_dir.unwrap_or_else(|| "./dzexams_downloaded_pdfs".to_string());
-    let base_path = PathBuf::from(&base_str);
+    let base_path = get_effective_docs_dir(docs_dir);
     if !base_path.exists() {
         return Ok(Vec::new());
     }
@@ -309,11 +343,67 @@ fn get_lan_info() -> LanInfo {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BACKGROUND NODE.JS SERVER MANAGER
+// ─────────────────────────────────────────────────────────────────────────────
+
+use std::sync::Mutex;
+use std::process::Child;
+use tauri::Manager;
+
+struct NodeServerState(Mutex<Option<Child>>);
+
+fn start_node_server() -> Option<Child> {
+    let mut candidate_dirs = Vec::new();
+
+    if let Ok(cwd) = std::env::current_dir() {
+        candidate_dirs.push(cwd.clone());
+        if let Some(parent) = cwd.parent() {
+            candidate_dirs.push(parent.to_path_buf());
+        }
+    }
+
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(parent) = exe_path.parent() {
+            candidate_dirs.push(parent.to_path_buf());
+            if let Some(gp) = parent.parent() {
+                candidate_dirs.push(gp.to_path_buf());
+                if let Some(ggp) = gp.parent() {
+                    candidate_dirs.push(ggp.to_path_buf());
+                }
+            }
+        }
+    }
+
+    for dir in candidate_dirs {
+        let server_js = dir.join("server.js");
+        if server_js.exists() {
+            #[cfg(target_os = "windows")]
+            use std::os::windows::process::CommandExt;
+            #[cfg(target_os = "windows")]
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+            let mut cmd = Command::new("node");
+            cmd.arg("server.js").current_dir(&dir);
+            #[cfg(target_os = "windows")]
+            cmd.creation_flags(CREATE_NO_WINDOW);
+
+            if let Ok(child) = cmd.spawn() {
+                return Some(child);
+            }
+        }
+    }
+    None
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN APP ENTRY POINT
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn main() {
+    let server_child = start_node_server();
+
     tauri::Builder::default()
+        .manage(NodeServerState(Mutex::new(server_child)))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
@@ -325,6 +415,17 @@ fn main() {
             print_document,
             get_lan_info
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Millora desktop application");
+        .build(tauri::generate_context!())
+        .expect("error while building Millora desktop application")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::Exit = event {
+                if let Some(state) = app_handle.try_state::<NodeServerState>() {
+                    if let Ok(mut lock) = state.0.lock() {
+                        if let Some(mut child) = lock.take() {
+                            let _ = child.kill();
+                        }
+                    }
+                }
+            }
+        });
 }

@@ -2565,6 +2565,19 @@
     }
   </script>
   <script src="js/pdf-lib.min.js"></script>
+  <!-- API Origin Resolver (Tauri & Web) -->
+  <script>
+    window.API_BASE = (function() {
+      if (window.location.protocol === 'tauri:' || window.location.hostname === 'tauri.localhost' || (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')) {
+        return 'http://127.0.0.1:3000';
+      }
+      return '';
+    })();
+    window.apiUrl = function(endpoint) {
+      if (!endpoint.startsWith('/')) endpoint = '/' + endpoint;
+      return window.API_BASE + endpoint;
+    };
+  </script>
 
   <!-- Application Modular Scripts (Cache-Busted v=2.9) -->
   <script src="js/db.js?v=2.9"></script>

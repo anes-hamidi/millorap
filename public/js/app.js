@@ -626,7 +626,8 @@ async function executeStudioMerge(actionType = 'download') {
 
     if (localFiles.length === 0 && serverFiles.length > 0) {
       // Direct server-side merge
-      const res = await fetch('/api/merge', {
+      const mergeEndpoint = window.apiUrl ? window.apiUrl('/api/merge') : '/api/merge';
+      const res = await fetch(mergeEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -680,7 +681,8 @@ async function executeStudioMerge(actionType = 'download') {
         if (item.isLocal && item.fileBlob) {
           pdfBytes = await item.fileBlob.arrayBuffer();
         } else {
-          const res = await fetch(`/api/files/download?path=${encodeURIComponent(item.path)}`);
+          const downloadEndpoint = window.apiUrl ? window.apiUrl(`/api/files/download?path=${encodeURIComponent(item.path)}`) : `/api/files/download?path=${encodeURIComponent(item.path)}`;
+          const res = await fetch(downloadEndpoint);
           if (!res.ok) continue;
           pdfBytes = await res.arrayBuffer();
         }
@@ -824,7 +826,8 @@ async function renderTransferDropZoneWorkspace() {
   if (!canvas) return;
 
   try {
-    const res = await fetch('/api/lan-ip');
+    const lanEndpoint = window.apiUrl ? window.apiUrl('/api/lan-ip') : '/api/lan-ip';
+    const res = await fetch(lanEndpoint);
     if (res.ok) {
       const data = await res.json();
       if (data.baseUrl) {
@@ -878,7 +881,8 @@ async function renderTransferDropZoneWorkspace() {
   window.deleteTransferFile = async function(filename) {
     if (!confirm('Delete "' + filename + '" from the reception stream?')) return;
     try {
-      const r = await fetch('/api/transfer/files/' + encodeURIComponent(filename), { method: 'DELETE' });
+      const deleteEndpoint = window.apiUrl ? window.apiUrl('/api/transfer/files/' + encodeURIComponent(filename)) : '/api/transfer/files/' + encodeURIComponent(filename);
+      const r = await fetch(deleteEndpoint, { method: 'DELETE' });
       const d = await r.json().catch(() => ({}));
       if (r.ok && d.success) { showToast('Deleted: ' + filename); fetchUploads(); }
       else showToast(d.error || 'Delete failed', 'error');
@@ -898,7 +902,8 @@ async function renderTransferDropZoneWorkspace() {
     clearBtn.onclick = async () => {
       if (!confirm('Clear ALL received files from the reception stream?')) return;
       try {
-        const r = await fetch('/api/transfer/clear', { method: 'POST' });
+        const clearEndpoint = window.apiUrl ? window.apiUrl('/api/transfer/clear') : '/api/transfer/clear';
+        const r = await fetch(clearEndpoint, { method: 'POST' });
         const d = await r.json().catch(() => ({}));
         if (r.ok && d.success) { showToast('Cleared ' + d.count + ' file(s)'); fetchUploads(); }
         else showToast(d.error || 'Clear failed', 'error');
@@ -910,7 +915,8 @@ async function renderTransferDropZoneWorkspace() {
   if (transferPollTimer) clearInterval(transferPollTimer);
   async function fetchUploads() {
     try {
-      const res = await fetch('/api/transfer/files');
+      const filesEndpoint = window.apiUrl ? window.apiUrl('/api/transfer/files') : '/api/transfer/files';
+      const res = await fetch(filesEndpoint);
       if (!res.ok) return;
       const data = await res.json();
 

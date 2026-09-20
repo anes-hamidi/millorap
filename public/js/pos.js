@@ -102,7 +102,8 @@
       if (!posProducts || posProducts.length === 0) {
         console.warn('IndexedDB returned 0 products, fetching from /api/pos/products...');
         try {
-          const res = await fetch('/api/pos/products');
+          const posEndpoint = window.apiUrl ? window.apiUrl('/api/pos/products') : '/api/pos/products';
+          const res = await fetch(posEndpoint);
           if (res.ok) {
             const data = await res.json();
             if (data.products && data.products.length > 0) {
