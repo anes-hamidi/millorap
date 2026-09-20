@@ -331,8 +331,9 @@
     });
   });
 
-  // Attach debounced live input listeners to all form controls
-  const inputElements = document.querySelectorAll('input, select, textarea');
+  // Attach debounced live input listeners to QR form controls only
+  const qrSection = document.getElementById('section-qr-app');
+  const inputElements = qrSection ? qrSection.querySelectorAll('input, select, textarea') : [];
   inputElements.forEach(elem => {
     elem.addEventListener('input', debouncedUpdateQRData);
     elem.addEventListener('change', updateQRData);

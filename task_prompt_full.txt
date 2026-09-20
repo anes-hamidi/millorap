@@ -1,0 +1,152 @@
+<USER_REQUEST>
+# Task: Migrate FlexiPOS to Dexie Cloud for Multi-Register Sync
+
+## Role & Context
+
+You are working in the **FlexiPOS** codebase — a vanilla JS Progressive Web App (no framework) that runs a point-of-sale system for a single shop with **multiple physical registers/terminals**. Data is currently stored locally per-device in IndexedDB via Dexie.js, with no synchronization between registers. Your job is to add real-time, offline-first sync across all registers in the shop using **Dexie Cloud**, without breaking any existing functionality.
+
+Read every file listed under "Files in Scope" in full before making any changes. Do not guess at behavior you haven't verified by reading the code.
+
+## Objective
+
+Implement multi-register sync so that all terminals in the shop:
+- Share the same product catalog, stock levels, sales history, customers, and debt ledger in real time when online.
+- Continue to function fully offline (scan, sell, adjust stock, manage debts) exactly as today.
+- Merge changes made on multiple offline registers without data loss or silent overselling when they reconnect.
+- Never require a manual "export/import JSON" step as the normal sync path (that stays only as a disaster-recovery fallback).
+
+## Non-Negotiable Constraints
+
+1. **Do not introduce a new database or ORM.** Stay on Dexie.js + IndexedDB on the client. The sync layer is the Dexie Cloud addon (`dexie-cloud-addon`), not a rewrite to SQL/PowerSync/Firebase/etc.
+2. **Do not break atomicity.** `checkoutService.js`'s checkout transaction must remain atomic across `products`, `sales`, `saleItems`, and `stockLogs`.
+3. **Preserve all existing UI behavior** in `app.js`, `pos.js`, `debtService.js`, `analyticsService.js`, `backupService.js`, `file-browser.js`, `printing.js`, `qr-generator.js` unless a change is explicitly required by this migration (e.g., ID type changes).
+4. **Never destroy user data silently.** Any existing code path that can delete or overwrite the whole database (see Task 5) must require explicit confirmation and must not run automatically on error.
+5. **All schema changes must be additive Dexie `.version().upgrade()` migrations** — never mutate the `version(1..3)` blocks already in `db.js`. Add a new `version(4)`.
+
+## Files in Scope
+
+```
+db.js               — Dexie schema, DB init, category CRUD
+checkoutService.js  — atomic checkout transaction (stock decrement, sale insert)
+backupService.js    — JSON/CSV export & full-database import
+debtService.js      — customer debt ledger
+analyticsService.js — read-only aggregation queries
+sw.js               — service worker / cache strategy
+app.js, pos.js, file-browser.js, printing.js, qr-generator.js — consumers of db.js;
+  grep these for any assumption that IDs are integers (parseInt, Number(), ++id semantics)
+```
+
+## Required Changes
+
+### Task 1 — Schema migration to global IDs (`db.js`)
+
+Add a `db.version(4)` block that converts every table's primary key from `++id` (auto-increment integer) to `@id` (Dexie Cloud global ID), required because Dexie Cloud needs globally unique IDs to avoid insert collisions across registers.
+
+- Write an `.upgrade(tx => {...})` function that, for every table, replaces the old integer `id` with a new global ID and preserves the old value as `_legacyId` for auditability.
+- After generating new IDs for every table, rewrite every foreign key field that pointed at an old integer ID: `saleItems.saleId`, `saleItems.productId`, `stockLogs.productId`, `debts.customerId`, `debts.saleId`, `debtPayments.debtId`.
+- Order matters: generate all new IDs first, build an old→new lookup map per table, then do a second pass rewriting foreign keys. Do not rewrite a foreign key before its target table's new ID exists.
+- This migration must run inside Dexie's upgrade transaction so it is all-or-nothing (a failure must not leave the DB half-migrated).
+
+### Task 2 — Fix the stock-decrement race condition (`checkoutService.js`)
+
+The current checkout does an **absolute** stock write:
+
+```js
+await db.products.update(line.productId, { currentStock: newStock, updatedAt: timestamp });
+```
+
+This is unsafe under multi-register sync: two registers selling the same product while both offline will both compute `newStock` from stale data, and whichever syncs last silently overwrites the other's sale — resulting in oversold stock with no error.
+
+Replace it with a **relative** operation using `.modify()`, so Dexie Cloud's server-side consistency layer can re-execute the decrement against the true current stock instead of overwriting it:
+
+```js
+await db.products.where('id').equals(line.productId).modify(p => {
+  p.currentStock -= line.quantity;
+  p.updatedAt = timestamp;
+});
+```
+
+Keep the existing `prevStock`/`newStock` values for the `stockLogs` audit entry and the receipt — only the actual write to `products` changes. Do not change the pre-transaction stock validation logic; note in a code comment that this validation is a UX-level early check, not the source of truth, since true stock is enforced by the relative modify at sync time.
+
+### Task 3 — Terminal-scoped order references (`checkoutService.js`, plus a new small settings helper)
+
+Current order ref generation:
+
+```js
+const orderRef = 'DZ-' + Date.now().toString().slice(-6) + '-' + Math.floor(100 + Math.random() * 900);
+```
+
+This can collide across registers (the `sales` table has a unique index on `orderRef`). Add:
+
+1. A terminal ID setting: on first run, prompt for or auto-generate a short terminal identifier (e.g. `T1`, `T2`), persist it in `localStorage` under `pos_terminal_id`, and surface it somewhere in Settings so shop staff can identify/rename registers.
+2. Update order ref generation to include it:
+
+```js
+const terminalId = localStorage.getItem('pos_terminal_id') || 'T1';
+const orderRef = 'DZ-' + terminalId + '-' + Date.now().toString(36) + '-' + Math.floor(100 + Math.random() * 900);
+```
+
+3. Surface `terminalId` in the sales register / receipt UI if there's an existing spot for it (check `app.js`/`pos.js` for where `orderRef` is displayed) so staff can tell which till rang up a sale.
+
+### Task 4 — Wire up Dexie Cloud (`db.js`)
+
+- Add `dexie-cloud-addon` as a dependency and register it on the `Dexie` constructor.
+- Configure `db.cloud.configure({...})` with the shop's Dexie Cloud database URL (leave this as a placeholder/config value — do not fabricate a real URL or key).
+- Create/verify a single shared realm representing "the shop" and ensure every terminal's login is added as a member of that realm, not given its own private realm. Confirm this is documented clearly at the top of `db.js` since getting the realm wrong silently isolates each register's data.
+- Confirm `db.cloud.syncState` (or equivalent) is exposed somewhere the UI can show sync status (online/syncing/offline/error) — add a minimal status indicator if none exists; do not build a large new UI for this, a small badge is sufficient.
+
+### Task 5 — Guard against silent data destruction (`db.js`, `backupService.js`)
+
+- In `db.js`'s `initDatabase()` catch block, remove the automatic `Dexie.delete('FlexiPOS_DB')` recovery path. On an open failure, surface the error to the user and require explicit confirmation before any destructive recovery action; log enough detail to diagnose the failure without deleting data first.
+- In `backupService.js`'s `importDatabaseFromJson()`, the current implementation clears every table before restoring. Once Dexie Cloud sync is active this would propagate a mass delete to every other register. Gate this function so it:
+  - Warns explicitly if `db.cloud` sync is configured/active, and
+  - Requires a second, explicit confirmation step before proceeding in that case.
+  - Add a code comment explaining why this is dangerous in a multi-register context.
+
+### Task 6 — Service worker offline behavior (`sw.js`)
+
+Current strategy is network-first for all static assets, which causes a visible stall on load when connectivity is poor — contrary to the app's stated "100% Offline-First" design. Change to:
+- **Cache-first, with background revalidation** for the static asset list (`ASSETS_TO_CACHE`).
+- Keep **network-first** for anything matching `/api/`, `/transfer`, `/pay` (unchanged — do not touch this branch).
+
+### Task 7 — ID type audit across consumers
+
+Grep `app.js`, `pos.js`, `debtService.js`, `analyticsService.js`, `file-browser.js` for any of:
+- `parseInt(...id...)`
+- `Number(...id...)`
+- comparisons or object keys assuming numeric IDs
+
+Since IDs are now Dexie Cloud global string IDs (not integers) after Task 1, fix every such site to treat IDs as opaque strings. List every file and line you changed in your final summary.
+
+## Testing / Acceptance Criteria
+
+Before considering this done, verify:
+
+1. A fresh install (empty IndexedDB) still seeds correctly under the new `version(4)` schema.
+2. An existing `version(3)` database with sample products, sales, customers, and debts upgrades cleanly to `version(4)`, and every foreign key (`saleItems.productId`, `debts.customerId`, etc.) still resolves to a valid row after migration. Write a small verification script or test that checks referential integrity post-migration.
+3. `checkoutService.processCheckout()` still returns the same response shape as before and still runs atomically — test that a checkout with insufficient stock still throws before any writes occur.
+4. Simulate two "registers" (two browser profiles or two Dexie Cloud client instances) each going offline, selling the last N units of the same product, then reconnecting — confirm the merged stock is correct (not double-decremented, not overwritten) and no data is lost.
+5. Two simulated registers generate an order in the same millisecond — confirm `orderRef` values do not collide.
+6. Confirm the app still functions with `db.cloud` unconfigured/offline (i.e., sync is additive, not a hard dependency for basic operation).
+7. Confirm `importDatabaseFromJson` now requires the added confirmation step when sync is active, and is otherwise unchanged when it isn't.
+8. Confirm `sw.js` serves cached assets immediately when offline and revalidates in the background when online.
+
+## Deliverables
+
+1. All code changes described above, committed with clear, scoped commit messages (one concern per commit: schema migration, checkout fix, orderRef fix, Dexie Cloud wiring, destructive-path guards, service worker, ID audit).
+2. A short `MIGRATION_NOTES.md` documenting: the realm setup steps required post-deploy, the Dexie Cloud database URL/config placeholder that needs to be filled in, and a rollback plan if the `version(4)` upgrade needs to be reverted on a device.
+3. A summary at the end of your work listing every file touched and, for Task 7 specifically, every call site changed.
+
+## Out of Scope (do not do these)
+
+- Do not migrate away from Dexie/IndexedDB.
+- Do not implement CRDT/Y.js-based collaborative editing — this app doesn't need it (no simultaneous field-level co-editing of the same record by design).
+- Do not redesign the checkout UI/UX beyond what's needed for the stock-write fix.
+- Do not remove `backupService.js`'s JSON export/CSV export functions — only the destructive *import* path needs the new guard.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-16T19:16:44+02:00.
+</ADDITIONAL_METADATA>
+<USER_SETTINGS_CHANGE>
+The user changed setting `Model Selection` from None to Gemini 3.8 Flash (Medium). No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.
+</USER_SETTINGS_CHANGE>

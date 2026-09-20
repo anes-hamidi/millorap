@@ -1,19 +1,25 @@
-/* Custom Styles for QR Code Generator */
+/* Custom Styles for Millora POS & Document Suite */
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
 :root {
   --primary-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.4);
+  --sidebar-width: 260px;
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(226, 232, 240, 0.8);
 }
 
 .dark {
-  --glass-bg: rgba(15, 23, 42, 0.75);
-  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-bg: rgba(15, 23, 42, 0.88);
+  --glass-border: rgba(51, 65, 85, 0.6);
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: -0.01em;
 }
 
 /* Glassmorphism Card Effect */
@@ -34,13 +40,17 @@ body {
 /* Gradient Button */
 .btn-gradient {
   background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-gradient:hover {
   background: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
-  box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 8px 20px -4px rgba(99, 102, 241, 0.4);
   transform: translateY(-1px);
+}
+
+.btn-gradient:active {
+  transform: translateY(0px);
 }
 
 /* Custom Scrollbar */
@@ -56,7 +66,7 @@ body {
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(156, 163, 175, 0.5);
+  background: rgba(156, 163, 175, 0.6);
 }
 
 /* Custom Input Styling */
@@ -68,73 +78,93 @@ input[type="color"]::-webkit-color-swatch {
   border-radius: 0.5rem;
 }
 
+/* Sidebar Navigation Items */
+.nav-link {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.nav-link.active {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(139, 92, 246, 0.12) 100%);
+  color: #4f46e5;
+  font-weight: 700;
+  border-left: 3px solid #6366f1;
+}
+
+.dark .nav-link.active {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(139, 92, 246, 0.2) 100%);
+  color: #a5b4fc;
+  border-left: 3px solid #818cf8;
+}
+
 /* Form Tab Active Styling */
 .tab-btn.active {
-  background-color: rgba(99, 102, 241, 0.1);
-  color: #6366f1;
+  background-color: rgba(99, 102, 241, 0.12);
+  color: #4f46e5;
   border-color: #6366f1;
+  font-weight: 700;
 }
 
 .dark .tab-btn.active {
-  background-color: rgba(139, 92, 246, 0.2);
-  color: #a78bfa;
-  border-color: #a78bfa;
+  background-color: rgba(139, 92, 246, 0.22);
+  color: #c7d2fe;
+  border-color: #818cf8;
 }
 
-/* Pattern Option Selection Cards */
+/* Style Option Selection Cards */
 .style-option-btn.selected {
   border-color: #6366f1;
-  background-color: rgba(99, 102, 241, 0.08);
+  background-color: rgba(99, 102, 241, 0.1);
+  box-shadow: 0 0 0 1px #6366f1;
 }
 .dark .style-option-btn.selected {
-  border-color: #8b5cf6;
-  background-color: rgba(139, 92, 246, 0.15);
-}
-
-/* Pulse animation for preview update */
-@keyframes pulse-once {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.02); }
-  100% { transform: scale(1); }
-}
-/* App Mode Navigation Button Active State */
-.app-mode-btn.active {
-  background-color: #ffffff;
-  color: #4f46e5;
-  font-weight: 700;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
-}
-
-.dark .app-mode-btn.active {
-  background-color: #0f172a;
-  color: #818cf8;
+  border-color: #818cf8;
+  background-color: rgba(139, 92, 246, 0.2);
+  box-shadow: 0 0 0 1px #818cf8;
 }
 
 /* POS Payment Button Selected State */
 .pos-pay-btn.selected {
   border-color: #6366f1;
-  background-color: rgba(99, 102, 241, 0.08);
+  background-color: rgba(99, 102, 241, 0.1);
   color: #4f46e5;
+  box-shadow: 0 0 0 1px #6366f1;
 }
 
 .dark .pos-pay-btn.selected {
   border-color: #818cf8;
-  background-color: rgba(99, 102, 241, 0.2);
-  color: #a5b4fc;
+  background-color: rgba(99, 102, 241, 0.25);
+  color: #c7d2fe;
+  box-shadow: 0 0 0 1px #818cf8;
+}
+
+/* Animation Utilities */
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeInScale 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pulse-once {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
 }
 
 .qr-update-pulse {
   animation: pulse-once 0.25s ease-out;
 }
 
-
 /* Print View Formatting */
 @media print {
   body * {
-    visibility: hidden;
+    visibility: hidden !important;
   }
   #print-area, #print-area * {
-    visibility: visible;
+    visibility: visible !important;
   }
   #print-area {
     position: absolute;
@@ -145,7 +175,7 @@ input[type="color"]::-webkit-color-swatch {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 2rem;
+    padding: 1rem;
   }
 }
 
@@ -203,7 +233,7 @@ input[type="color"]::-webkit-color-swatch {
   border-radius: 0 !important;
   padding: 0.75rem !important;
   margin: 0 !important;
-  background-color: rgba(15, 23, 42, 0.97) !important;
+  background-color: rgba(15, 23, 42, 0.98) !important;
   backdrop-filter: blur(24px) !important;
   -webkit-backdrop-filter: blur(24px) !important;
 }
@@ -213,15 +243,7 @@ input[type="color"]::-webkit-color-swatch {
   border-radius: 1rem !important;
 }
 
-/* Sidebar transition */
-#print-sidebar-col {
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-#print-viewer-col {
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Multi-select check styling */
+/* Multi-select checkbox styling */
 .file-checkbox {
   cursor: pointer;
   accent-color: #4f46e5;
@@ -237,13 +259,125 @@ input[type="color"]::-webkit-color-swatch {
   border-color: #818cf8 !important;
 }
 
-@keyframes fadeInScale {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+/* Table styling for inventory & analytics */
+.data-table th {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 10px 14px;
+}
+.data-table td {
+  padding: 12px 14px;
+  font-size: 12px;
 }
 
-.animate-fade-in {
-  animation: fadeInScale 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+/* ==========================================
+   MINIMIZED / COMPACT SIDEBAR STYLING
+   ========================================== */
+#app-sidebar {
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s ease;
 }
+
+#app-sidebar.sidebar-compact {
+  width: 5rem !important; /* 80px compact width */
+}
+
+#app-sidebar.sidebar-compact .sidebar-expanded-only {
+  display: none !important;
+}
+
+#app-sidebar.sidebar-compact .sidebar-group-title {
+  display: none !important;
+}
+
+#app-sidebar.sidebar-compact .nav-link {
+  justify-content: center !important;
+  padding: 0.5rem 0.25rem !important;
+  flex-direction: column !important;
+  gap: 0.25rem !important;
+  border-radius: 0.85rem !important;
+}
+
+#app-sidebar.sidebar-compact .nav-link .nav-icon {
+  font-size: 1.25rem !important;
+  line-height: 1 !important;
+}
+
+#app-sidebar.sidebar-compact .nav-link .nav-compact-label {
+  display: block !important;
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  letter-spacing: -0.01em;
+}
+
+#app-sidebar:not(.sidebar-compact) .nav-compact-label {
+  display: none !important;
+}
+
+#app-sidebar.sidebar-compact .nav-badge-pill {
+  position: absolute !important;
+  top: 2px !important;
+  right: 4px !important;
+  padding: 0 4px !important;
+  font-size: 8px !important;
+  line-height: 14px !important;
+}
+
+/* ==========================================
+   ENTERPRISE POS DESIGN TOKENS & ANIMATIONS
+   ========================================== */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+@keyframes pos-scan-pulse {
+  0% {
+    background-color: rgba(16, 185, 129, 0.45);
+    border-color: rgba(16, 185, 129, 0.9);
+    transform: scale(1.02);
+  }
+  60% {
+    background-color: rgba(16, 185, 129, 0.15);
+  }
+  100% {
+    background-color: transparent;
+    transform: scale(1);
+  }
+}
+
+.pos-scan-highlight {
+  animation: pos-scan-pulse 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes pos-total-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.08); color: #10b981; }
+  100% { transform: scale(1); }
+}
+
+.pos-total-updated {
+  animation: pos-total-pulse 0.22s ease-out;
+}
+
+.smart-tender-chip {
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+.smart-tender-chip:hover {
+  transform: translateY(-2px);
+}
+.smart-tender-chip:active {
+  transform: translateY(0px) scale(0.97);
+}
+
+/* Hardware Barcode Stream Feedback */
+.pos-wedge-active {
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.5) !important;
+}
+
 
 

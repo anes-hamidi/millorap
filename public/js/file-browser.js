@@ -464,7 +464,16 @@
     }
 
     updateMultiSelectUI();
-    renderShopTree();
+    const target = document.querySelector(`[data-file-path="${CSS.escape(cleanPath)}"]`);
+    if (target) {
+      const isSel = selectedFiles.has(cleanPath);
+      target.classList.toggle('is-selected', isSel);
+      target.classList.toggle('font-semibold', isSel);
+      const cb = target.querySelector('.file-checkbox');
+      if (cb) cb.checked = isSel;
+    } else {
+      renderShopTree();
+    }
   }
 
   function clearAllSelectedFiles() {
@@ -501,6 +510,20 @@
       } else {
         viewerMergeBtn.classList.add('hidden');
       }
+    }
+
+    const navMergeBadge = document.getElementById('nav-merge-badge');
+    if (navMergeBadge) {
+      if (count > 0) {
+        navMergeBadge.classList.remove('hidden');
+        navMergeBadge.innerText = count;
+      } else {
+        navMergeBadge.classList.add('hidden');
+      }
+    }
+
+    if (window.renderMergeStudioWorkspace) {
+      window.renderMergeStudioWorkspace();
     }
 
     if (toggleBtn && toggleLabel) {
@@ -806,7 +829,14 @@
       iframe.src = `/api/view?file=${encodeURIComponent(cleanPath)}`;
     }
 
-    renderShopTree();
+    const prevActive = document.querySelector('.tree-file-row.active');
+    if (prevActive) prevActive.classList.remove('active');
+    const target = document.querySelector(`[data-file-path="${CSS.escape(cleanPath)}"]`);
+    if (target) {
+      target.classList.add('active');
+    } else {
+      renderShopTree();
+    }
     renderBreadcrumbs();
   }
 
@@ -896,9 +926,24 @@
     // Clear selection
     document.getElementById('clear-selection-btn')?.addEventListener('click', clearAllSelectedFiles);
 
-    // Open merge modal buttons
-    document.getElementById('open-merge-modal-btn')?.addEventListener('click', openMergeModal);
-    document.getElementById('viewer-merge-btn')?.addEventListener('click', openMergeModal);
+    // Open merge studio buttons (direct navigation to dedicated Merge Studio workspace)
+    const handleOpenMergeStudio = () => {
+      if (selectedFiles.size === 0 && activeShopFilePath && activeShopFilePath.toLowerCase().endsWith('.pdf')) {
+        selectedFiles.add(activeShopFilePath);
+        selectedFilesInfo.set(activeShopFilePath, {
+          name: activeShopFilePath.split('/').pop(),
+          isPdf: true,
+          sizeMB: '0.00'
+        });
+      }
+      if (typeof window.switchAppMode === 'function') {
+        window.switchAppMode('merge');
+      } else {
+        openMergeModal();
+      }
+    };
+    document.getElementById('open-merge-modal-btn')?.addEventListener('click', handleOpenMergeStudio);
+    document.getElementById('viewer-merge-btn')?.addEventListener('click', handleOpenMergeStudio);
 
     // Close merge modal
     document.getElementById('close-merge-modal-btn')?.addEventListener('click', () => {

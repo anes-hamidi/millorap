@@ -204,6 +204,19 @@ router.get('/view', (req, res) => {
   }
 });
 
+// API: Download document directly
+router.get(['/files/download', '/download'], (req, res) => {
+  try {
+    const relativePath = req.query.path || req.query.file;
+    if (!relativePath) return res.status(400).json({ success: false, error: 'File path required' });
+    const filePath = getSafePath(relativePath);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ success: false, error: 'File not found' });
+    res.download(filePath, path.basename(filePath));
+  } catch (err) {
+    res.status(403).json({ success: false, error: err.message });
+  }
+});
+
 // API: Direct Print Command via pdf-to-printer
 router.post('/print', async (req, res) => {
   const { filePath, copies, printer } = req.body;
@@ -232,14 +245,36 @@ router.post('/print', async (req, res) => {
   }
 });
 
-// API: List connected printers
+// API: List connected printers with robust Windows fallback
 router.get('/printers', async (req, res) => {
   try {
-    if (!getPrintersFn) {
-      return res.json({ success: true, printers: [] });
+    if (getPrintersFn) {
+      try {
+        const printers = await getPrintersFn();
+        if (Array.isArray(printers) && printers.length > 0) {
+          return res.json({ success: true, printers });
+        }
+      } catch (err) {
+        console.warn('pdf-to-printer getPrinters failed, trying PowerShell fallback:', err.message);
+      }
     }
-    const printers = await getPrintersFn();
-    res.json({ success: true, printers });
+
+    // Resilient fallback for Windows environments
+    if (process.platform === 'win32') {
+      const { exec } = require('child_process');
+      exec('powershell -NoProfile -Command "Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name"', (err, stdout) => {
+        if (!err && stdout) {
+          const list = stdout.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+          if (list.length > 0) {
+            return res.json({ success: true, printers: list });
+          }
+        }
+        res.json({ success: true, printers: [] });
+      });
+      return;
+    }
+
+    res.json({ success: true, printers: [] });
   } catch (err) {
     res.json({ success: true, printers: [], error: err.message });
   }
@@ -304,8 +339,11 @@ router.post('/merge', async (req, res) => {
       }
 
       const destFullPath = path.join(folderFull, cleanName);
-      // Ensure target path is also safe
-      if (!destFullPath.startsWith(path.resolve(EFFECTIVE_DOCS_DIR))) {
+      // Ensure target path is safe (within documents dir or uploads dir)
+      const resolvedDest = path.resolve(destFullPath);
+      const isDocs = resolvedDest.startsWith(path.resolve(EFFECTIVE_DOCS_DIR));
+      const isUploads = resolvedDest.startsWith(path.resolve(UPLOADS_DIR));
+      if (!isDocs && !isUploads) {
         throw new Error('Access denied: Invalid target folder');
       }
 

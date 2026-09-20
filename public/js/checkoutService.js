@@ -14,14 +14,14 @@
    * @returns {Promise<Object>} Completed sale receipt and audit summary
    */
   async function processCheckout({ items, discountPercent = 0, paymentMethod = 'cash' }) {
-    if (!window.FlexiDB || !window.FlexiDB.db) {
-      throw new Error('Database is not initialized. Please refresh the page.');
-    }
-    const db = window.FlexiDB.db;
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      throw new Error('Cannot process checkout: Order cart is empty.');
-    }
+  if (window.FlexiDB && window.FlexiDB.init) {
+    await window.FlexiDB.init();
+  }
+  
+  if (!window.FlexiDB || !window.FlexiDB.db) {
+    throw new Error('Database is not initialized. Please refresh the page.');
+  }
+  const db = window.FlexiDB.db;
 
     // Generate unique human-readable Order Reference
     const orderRef = 'DZ-' + Date.now().toString().slice(-6) + '-' + Math.floor(100 + Math.random() * 900);
@@ -114,6 +114,13 @@
       }
 
       // 3. Insert primary Sale record
+      const lineItemsSnapshot = validatedLineItems.map(l => ({
+        name: l.productName,
+        qty: l.quantity,
+        price: l.unitSellingPrice,
+        total: l.lineTotal
+      }));
+
       const saleId = await db.sales.add({
         orderRef,
         timestamp,
@@ -124,7 +131,8 @@
         totalAmount,
         totalCost,
         netProfit,
-        itemCount: validatedLineItems.reduce((acc, l) => acc + l.quantity, 0)
+        itemCount: validatedLineItems.reduce((acc, l) => acc + l.quantity, 0),
+        items: lineItemsSnapshot
       });
 
       // 4. Insert Line Items snapshots linked to saleId

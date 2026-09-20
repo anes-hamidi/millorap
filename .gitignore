@@ -3,3 +3,7 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+src-tauri/target/
+ngrok.exe
+uploads/
+

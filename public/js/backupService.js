@@ -28,28 +28,40 @@
     }
     const db = window.FlexiDB.db;
 
-    const [products, sales, saleItems, stockLogs] = await Promise.all([
+    const [products, sales, saleItems, stockLogs, customers, debts, debtPayments, categories] = await Promise.all([
       db.products.toArray(),
       db.sales.toArray(),
       db.saleItems.toArray(),
-      db.stockLogs.toArray()
+      db.stockLogs.toArray(),
+      db.customers ? db.customers.toArray().catch(() => []) : Promise.resolve([]),
+      db.debts ? db.debts.toArray().catch(() => []) : Promise.resolve([]),
+      db.debtPayments ? db.debtPayments.toArray().catch(() => []) : Promise.resolve([]),
+      db.categories ? db.categories.toArray().catch(() => []) : Promise.resolve([])
     ]);
 
     const backupData = {
       app: 'FlexiPOS',
-      version: 1,
+      version: 3,
       exportedAt: new Date().toISOString(),
       counts: {
         products: products.length,
         sales: sales.length,
         saleItems: saleItems.length,
-        stockLogs: stockLogs.length
+        stockLogs: stockLogs.length,
+        customers: (customers || []).length,
+        debts: (debts || []).length,
+        debtPayments: (debtPayments || []).length,
+        categories: (categories || []).length
       },
       data: {
         products,
         sales,
         saleItems,
-        stockLogs
+        stockLogs,
+        customers: customers || [],
+        debts: debts || [],
+        debtPayments: debtPayments || [],
+        categories: categories || []
       }
     };
 
@@ -94,15 +106,26 @@
       throw new Error('Incompatible backup file format: Missing products store.');
     }
 
+    const storesToLock = [db.products, db.sales, db.saleItems, db.stockLogs];
+    if (db.customers) storesToLock.push(db.customers);
+    if (db.debts) storesToLock.push(db.debts);
+    if (db.debtPayments) storesToLock.push(db.debtPayments);
+    if (db.categories) storesToLock.push(db.categories);
+
     // Atomic transaction replacing database records
-    return await db.transaction('rw', db.products, db.sales, db.saleItems, db.stockLogs, async () => {
+    return await db.transaction('rw', storesToLock, async () => {
       // Clear existing records
-      await Promise.all([
+      const clearPromises = [
         db.products.clear(),
         db.sales.clear(),
         db.saleItems.clear(),
         db.stockLogs.clear()
-      ]);
+      ];
+      if (db.customers) clearPromises.push(db.customers.clear());
+      if (db.debts) clearPromises.push(db.debts.clear());
+      if (db.debtPayments) clearPromises.push(db.debtPayments.clear());
+      if (db.categories) clearPromises.push(db.categories.clear());
+      await Promise.all(clearPromises);
 
       // Bulk add restored data
       if (json.data.products && json.data.products.length > 0) {
@@ -117,6 +140,18 @@
       if (json.data.stockLogs && json.data.stockLogs.length > 0) {
         await db.stockLogs.bulkAdd(json.data.stockLogs);
       }
+      if (db.customers && json.data.customers && json.data.customers.length > 0) {
+        await db.customers.bulkAdd(json.data.customers);
+      }
+      if (db.debts && json.data.debts && json.data.debts.length > 0) {
+        await db.debts.bulkAdd(json.data.debts);
+      }
+      if (db.debtPayments && json.data.debtPayments && json.data.debtPayments.length > 0) {
+        await db.debtPayments.bulkAdd(json.data.debtPayments);
+      }
+      if (db.categories && json.data.categories && json.data.categories.length > 0) {
+        await db.categories.bulkAdd(json.data.categories);
+      }
 
       markBackupCompleted();
       return {
@@ -125,7 +160,11 @@
           products: (json.data.products || []).length,
           sales: (json.data.sales || []).length,
           saleItems: (json.data.saleItems || []).length,
-          stockLogs: (json.data.stockLogs || []).length
+          stockLogs: (json.data.stockLogs || []).length,
+          customers: (json.data.customers || []).length,
+          debts: (json.data.debts || []).length,
+          debtPayments: (json.data.debtPayments || []).length,
+          categories: (json.data.categories || []).length
         }
       };
     });
@@ -206,6 +245,8 @@
     importDatabaseFromJson,
     exportInventoryToCsv,
     exportSalesRegisterToCsv,
+    exportDebtsToCsv: () => window.DebtService?.exportDebtsToCsv(),
+    exportDebtPaymentsToCsv: () => window.DebtService?.exportDebtPaymentsToCsv(),
     isBackupReminderDue
   };
 })();

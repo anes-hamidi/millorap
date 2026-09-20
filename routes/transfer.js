@@ -99,5 +99,89 @@ router.get('/transfer/status/:sessionId', (req, res) => {
   return res.json({ success: true, hasFiles: false, files: [] });
 });
 
+// GET /api/transfer/files (Lists all files currently in the uploads directory)
+router.get('/transfer/files', (req, res) => {
+  try {
+    if (!fs.existsSync(UPLOADS_DIR)) {
+      return res.json({ success: true, count: 0, files: [] });
+    }
+
+    const entries = fs.readdirSync(UPLOADS_DIR, { withFileTypes: true });
+    const files = [];
+
+    for (const entry of entries) {
+      if (entry.isFile()) {
+        const fullPath = path.join(UPLOADS_DIR, entry.name);
+        let size = 0;
+        let mtime = new Date();
+        try {
+          const st = fs.statSync(fullPath);
+          size = st.size;
+          mtime = st.mtime;
+        } catch (e) {}
+
+        const isPdf = entry.name.toLowerCase().endsWith('.pdf');
+        files.push({
+          name: entry.name,
+          size: size,
+          sizeMB: (size / (1024 * 1024)).toFixed(2),
+          isPdf: isPdf,
+          path: `uploads/${entry.name}`,
+          url: `/api/view?file=${encodeURIComponent(`uploads/${entry.name}`)}`,
+          downloadUrl: `/api/files/download?path=${encodeURIComponent(`uploads/${entry.name}`)}`,
+          mtime: mtime
+        });
+      }
+    }
+
+    // Sort by modification time (newest first)
+    files.sort((a, b) => new Date(b.mtime) - new Date(a.mtime));
+
+    res.json({ success: true, count: files.length, files });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE /api/transfer/files/:filename (Deletes a specific uploaded file)
+router.delete('/transfer/files/:filename', (req, res) => {
+  try {
+    const filename = path.basename(req.params.filename);
+    const fullPath = path.join(UPLOADS_DIR, filename);
+
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).json({ success: false, error: 'File not found' });
+    }
+
+    fs.unlinkSync(fullPath);
+    res.json({ success: true, message: `Deleted ${filename}` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/transfer/clear (Clears all files in uploads directory)
+router.post('/transfer/clear', (req, res) => {
+  try {
+    if (!fs.existsSync(UPLOADS_DIR)) {
+      return res.json({ success: true, count: 0 });
+    }
+
+    const entries = fs.readdirSync(UPLOADS_DIR, { withFileTypes: true });
+    let count = 0;
+    for (const entry of entries) {
+      if (entry.isFile()) {
+        try {
+          fs.unlinkSync(path.join(UPLOADS_DIR, entry.name));
+          count++;
+        } catch (e) {}
+      }
+    }
+    res.json({ success: true, message: `Cleared ${count} file(s)`, count });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
 module.exports.UPLOADS_DIR = UPLOADS_DIR;

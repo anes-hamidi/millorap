@@ -1,0 +1,49 @@
+<USER_REQUEST>
+# Task: Migrate FlexiPOS to Dexie Cloud for Multi-Register Sync
+
+## Role & Context
+
+You are working in the **FlexiPOS** codebase — a vanilla JS Progressive Web App (no framework) that runs a point-of-sale system for a single shop with **multiple physical registers/terminals**. Data is currently stored locally per-device in IndexedDB via Dexie.js, with no synchronization between registers. Your job is to add real-time, offline-first sync across all registers in the shop using **Dexie Cloud**, without breaking any existing functionality.
+
+Read every file listed under "Files in Scope" in full before making any changes. Do not guess at behavior you haven't verified by reading the code.
+
+## Objective
+
+Implement multi-register sync so that all terminals in the shop:
+- Share the same product catalog, stock levels, sales history, customers, and debt ledger in real time when online.
+- Continue to function fully offline (scan, sell, adjust stock, manage debts) exactly as today.
+- Merge changes made on multiple offline registers without data loss or silent overselling when they reconnect.
+- Never require a manual "export/import JSON" step as the normal sync path (that stays only as a disaster-recovery fallback).
+
+## Non-Negotiable Constraints
+
+1. **Do not introduce a new database or ORM.** Stay on Dexie.js + IndexedDB on the client. The sync layer is the Dexie Cloud addon (`dexie-cloud-addon`), not a rewrite to SQL/PowerSync/Firebase/etc.
+2. **Do not break atomicity.** `checkoutService.js`'s checkout transaction must remain atomic across `products`, `sales`, `saleItems`, and `stockLogs`.
+3. **Preserve all existing UI behavior** in `app.js`, `pos.js`, `debtService.js`, `analyticsService.js`, `backupService.js`, `file-browser.js`, `printing.js`, `qr-generator.js` unless a change is explicitly required by this migration (e.g., ID type changes).
+4. **Never destroy user data silently.** Any existing code path that can delete or overwrite the whole database (see Task 5) must require explicit 
+<truncated 7707 bytes>
+ouble-decremented, not overwritten) and no data is lost.
+5. Two simulated registers generate an order in the same millisecond — confirm `orderRef` values do not collide.
+6. Confirm the app still functions with `db.cloud` unconfigured/offline (i.e., sync is additive, not a hard dependency for basic operation).
+7. Confirm `importDatabaseFromJson` now requires the added confirmation step when sync is active, and is otherwise unchanged when it isn't.
+8. Confirm `sw.js` serves cached assets immediately when offline and revalidates in the background when online.
+
+## Deliverables
+
+1. All code changes described above, committed with clear, scoped commit messages (one concern per commit: schema migration, checkout fix, orderRef fix, Dexie Cloud wiring, destructive-path guards, service worker, ID audit).
+2. A short `MIGRATION_NOTES.md` documenting: the realm setup steps required post-deploy, the Dexie Cloud database URL/config placeholder that needs to be filled in, and a rollback plan if the `version(4)` upgrade needs to be reverted on a device.
+3. A summary at the end of your work listing every file touched and, for Task 7 specifically, every call site changed.
+
+## Out of Scope (do not do these)
+
+- Do not migrate away from Dexie/IndexedDB.
+- Do not implement CRDT/Y.js-based collaborative editing — this app doesn't need it (no simultaneous field-level co-editing of the same record by design).
+- Do not redesign the checkout UI/UX beyond what's needed for the stock-write fix.
+- Do not remove `backupService.js`'s JSON export/CSV export functions — only the destructive *import* path needs the new guard.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-09-16T19:16:44+02:00.
+</ADDITIONAL_METADATA>
+<USER_SETTINGS_CHANGE>
+The user changed setting `Model Selection` from None to Gemini 3.8 Flash (Medium). No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.
+</USER_SETTINGS_CHANGE>

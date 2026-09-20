@@ -31,6 +31,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Mount API Routers
 app.use('/api', filesRouter);
 app.use('/api/pos', posRouter);
+app.use('/api', posRouter);
 app.use('/api', transferRouter);
 app.use('/', transferRouter);
 app.use('/', payRouter);

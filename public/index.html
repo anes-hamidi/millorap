@@ -25,27 +25,25 @@
       }
     }
   </script>
-  <!-- Dexie.js (IndexedDB library) -->
-  <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
   <link rel="manifest" href="manifest.json">
-
-  <!-- QRCodeStyling library -->
-  <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.5.0/lib/qr-code-styling.js"></script>
-  <!-- PDF-Lib library (local + CDN fallback) for client-side and offline PDF merging -->
-  <script src="js/pdf-lib.min.js"></script>
   <!-- Custom CSS -->
   <link rel="stylesheet" href="styles.css">
 </head>
-<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-300 antialiased selection:bg-indigo-500 selection:text-white">
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen flex transition-colors duration-300 antialiased selection:bg-indigo-500 selection:text-white overflow-x-hidden">
 
   <!-- Toast Notification Container -->
   <div id="toast-container" class="fixed top-5 right-5 flex flex-col gap-2 z-50 pointer-events-none"></div>
 
-  <!-- Header -->
-  <header class="border-b border-slate-200/80 dark:border-slate-800/80 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md sticky top-0 z-40">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+  <!-- Mobile Sidebar Overlay Backdrop -->
+  <div id="sidebar-backdrop" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-30 hidden lg:hidden transition-opacity"></div>
+
+  <!-- MAIN APP SIDEBAR (Minimized / Compact by default) -->
+  <aside id="app-sidebar" class="sidebar-compact fixed lg:sticky top-0 left-0 z-40 h-screen w-64 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-r border-slate-200/80 dark:border-slate-800 flex flex-col justify-between transition-all duration-300 -translate-x-full lg:translate-x-0 shrink-0 select-none">
+    
+    <!-- Sidebar Top: Brand & Logo + Expand/Collapse Button -->
+    <div class="p-3 border-b border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/25 shrink-0">
           <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <rect x="3" y="3" width="7" height="7" rx="1.5" stroke-width="2"/>
             <rect x="14" y="3" width="7" height="7" rx="1.5" stroke-width="2"/>
@@ -56,40 +54,193 @@
             <rect x="18" y="14" width="3" height="3" rx="0.5" stroke-width="2"/>
           </svg>
         </div>
-        <div>
-          <h1 class="text-xl font-extrabold tracking-tight text-gradient">Millora</h1>
-          <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">All-in-One QR Code Generator</p>
+        <div class="sidebar-expanded-only truncate">
+          <h1 class="text-base font-black tracking-tight text-gradient leading-none">Millora</h1>
+          <p class="text-[9px] text-slate-400 font-semibold tracking-wider uppercase mt-0.5">Shop & POS</p>
         </div>
       </div>
-
-      <div class="flex items-center gap-3">
-        <!-- App Mode Switcher -->
-        <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
-          <button id="view-pos-app" class="app-mode-btn active px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm">
-            <span>🛒</span> <span>POS Terminal</span>
-          </button>
-          <button id="view-qr-app" class="app-mode-btn px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-all">
-            <span>📱</span> <span>QR Generator</span>
-          </button>
-          <button id="view-print-app" class="app-mode-btn px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-all">
-            <span>🖨️</span> <span>Shop Print Center</span>
-          </button>
-        </div>
-
-
-        <!-- Theme Toggle Button -->
-        <button id="theme-toggle" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="Toggle Light/Dark Theme">
-          <!-- Sun icon -->
-          <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-          <!-- Moon icon -->
-          <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+      <div class="flex items-center gap-1">
+        <!-- Desktop Compact/Expand Toggle -->
+        <button id="toggle-sidebar-btn" class="hidden lg:flex p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs transition" title="Toggle Sidebar">
+          <span id="toggle-sidebar-icon">»</span>
         </button>
+        <!-- Mobile Close Button -->
+        <button id="close-sidebar-btn" class="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm">✕</button>
       </div>
     </div>
-  </header>
 
-  <!-- Main Container -->
-  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Sidebar Navigation Links Groups -->
+    <div class="flex-1 overflow-y-auto p-2 flex flex-col gap-3 text-xs font-semibold">
+      
+      <!-- Group 1: Commerce & POS -->
+      <div class="flex flex-col gap-1">
+        <span class="sidebar-group-title text-[9px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 pb-0.5">Commerce</span>
+        
+        <button id="nav-pos" data-workspace="pos" class="nav-link active relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="POS Cashier Terminal (F1)">
+          <div class="flex items-center gap-2.5">
+            <span class="nav-icon text-base">🛒</span>
+            <span class="sidebar-expanded-only">POS Cashier</span>
+          </div>
+          <span class="nav-compact-label">POS</span>
+          <span class="sidebar-expanded-only text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-mono">F1</span>
+        </button>
+
+        <button id="nav-inventory" data-workspace="inventory" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Inventory & Stock (F2)">
+          <div class="flex items-center gap-2.5">
+            <span class="nav-icon text-base">📦</span>
+            <span class="sidebar-expanded-only">Inventory & Stock</span>
+          </div>
+          <span class="nav-compact-label">Stock</span>
+          <span id="nav-low-stock-badge" class="nav-badge-pill hidden text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">0</span>
+        </button>
+
+        <button id="nav-analytics" data-workspace="analytics" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Sales & Analytics (F3)">
+          <div class="flex items-center gap-2.5">
+            <span class="nav-icon text-base">📊</span>
+            <span class="sidebar-expanded-only">Sales & Analytics</span>
+          </div>
+          <span class="nav-compact-label">Ventes</span>
+          <span class="sidebar-expanded-only text-[10px] text-slate-400">Reports</span>
+        </button>
+
+        <button id="nav-debts" data-workspace="debts" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Customer Credit & Debt Ledger">
+          <div class="flex items-center gap-2.5">
+            <span class="nav-icon text-base">🏦</span>
+            <span class="sidebar-expanded-only">Customer Debts</span>
+          </div>
+          <span class="nav-compact-label">Dettes</span>
+          <span id="nav-debts-badge" class="nav-badge-pill hidden text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700">0 DA</span>
+        </button>
+      </div>
+
+      <!-- Group 2: Document & Printing -->
+      <div class="flex flex-col gap-1">
+        <span class="sidebar-group-title text-[9px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 pb-0.5">Documents</span>
+        
+        <button id="nav-print" data-workspace="print" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Document Print Hub (F4)">
+          <div class="flex items-center gap-2.5">
+            <span class="nav-icon text-base">🖨️</span>
+            <span class="sidebar-expanded-only">Print Hub</span>
+          </div>
+          <span class="nav-compact-label">Print</span>
+          <span class="sidebar-expanded-only text-[10px] text-slate-400 font-mono">44k</span>
+        </button>
+
+        <button id="nav-merge" data-workspace="merge" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="PDF Multi-File Merge Studio">
+          <div class="flex items-center gap-2.5">
+            <span class="nav-icon text-base">✨</span>
+            <span class="sidebar-expanded-only">PDF Merge Studio</span>
+          </div>
+          <span class="nav-compact-label">Merge</span>
+          <span id="nav-merge-badge" class="nav-badge-pill hidden text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400">0</span>
+        </button>
+
+        <button id="nav-transfer" data-workspace="transfer" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Mobile File Reception DropZone">
+          <div class="flex items-center gap-2.5">
+            <span class="nav-icon text-base">📲</span>
+            <span class="sidebar-expanded-only">Mobile File Drop</span>
+          </div>
+          <span class="nav-compact-label">Mobile</span>
+          <span class="sidebar-expanded-only text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">QR</span>
+        </button>
+      </div>
+
+      <!-- Group 3: Creative & Generator -->
+      <div class="flex flex-col gap-1">
+        <span class="sidebar-group-title text-[9px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 pb-0.5">Creative</span>
+        
+        <button id="nav-qr" data-workspace="qr" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="QR Code Studio">
+          <div class="flex items-center gap-2.5">
+            <span class="nav-icon text-base">📱</span>
+            <span class="sidebar-expanded-only">QR Code Studio</span>
+          </div>
+          <span class="nav-compact-label">QR</span>
+          <span class="sidebar-expanded-only text-[10px] text-slate-400">9 Types</span>
+        </button>
+      </div>
+
+      <!-- Group 4: System & Settings -->
+      <div class="flex flex-col gap-1">
+        <span class="sidebar-group-title text-[9px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 pb-0.5">System</span>
+        
+        <button id="nav-settings" data-workspace="settings" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="System Settings & Hardware">
+          <div class="flex items-center gap-2.5">
+            <span class="nav-icon text-base">⚙️</span>
+            <span class="sidebar-expanded-only">Backup & Setup</span>
+          </div>
+          <span class="nav-compact-label">Config</span>
+          <span class="sidebar-expanded-only text-[10px] text-slate-400">Setup</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Sidebar Bottom Footer -->
+    <div class="p-2 border-t border-slate-200/60 dark:border-slate-800/80 flex flex-col gap-1 text-center">
+      <div class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-center gap-1.5 text-[11px]">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+        <span class="sidebar-expanded-only text-slate-600 dark:text-slate-400 truncate">100% Offline DB Ready</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- APP MAIN CONTENT WRAPPER -->
+  <div class="flex-1 flex flex-col min-w-0 min-h-screen">
+
+    <!-- Top Status Header Bar -->
+    <header class="border-b border-slate-200/80 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md sticky top-0 z-30">
+      <div class="px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+        
+        <!-- Left: Mobile Sidebar Trigger + Workspace Breadcrumb -->
+        <div class="flex items-center gap-3 min-w-0">
+          <button id="open-sidebar-btn" class="lg:hidden p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          
+          <div class="flex flex-col min-w-0">
+            <div class="flex items-center gap-2">
+              <span id="page-icon" class="text-lg">🛒</span>
+              <h2 id="page-title" class="text-sm sm:text-base font-extrabold text-slate-800 dark:text-slate-100 truncate">POS Cashier Terminal</h2>
+            </div>
+            <span id="page-subtitle" class="text-[11px] text-slate-400 font-medium truncate">Fast barcode checkout, order register & receipts</span>
+          </div>
+        </div>
+
+        <!-- Right: Status Chips, Clock & Theme Toggle -->
+        <div class="flex items-center gap-2.5 shrink-0">
+          
+          <!-- Low Stock Alert Pill -->
+          <button id="low-stock-alert-badge" onclick="switchAppMode('inventory')" class="hidden px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-1.5 animate-pulse" title="Click to view low stock inventory">
+            <span>⚠️</span> <span>0 Low Stock</span>
+          </button>
+
+          <!-- Outstanding Customer Debt Pill -->
+          <button id="debt-outstanding-badge" onclick="switchAppMode('debts')" class="hidden px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700 flex items-center gap-1.5 transition hover:scale-105" title="Créances clients en attente">
+            <span>🏦</span> <span id="debt-outstanding-amount">0 DA</span>
+          </button>
+
+          <!-- Scanner Status Indicator -->
+          <div id="pos-scanner-status" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Scanner Ready</span>
+          </div>
+
+          <!-- Real-time Clock -->
+          <div id="system-clock" class="hidden md:block px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 text-[11px] font-mono font-bold text-slate-600 dark:text-slate-300">
+            12:00:00
+          </div>
+
+          <!-- Theme Toggle Button -->
+          <button id="theme-toggle" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" title="Toggle Light/Dark Theme">
+            <svg class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+            <svg class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Dynamic Workspace Container -->
+    <main class="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
     
     <!-- SECTION 1: QR Generator App -->
     <div id="section-qr-app" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -649,14 +800,10 @@
                 </div>
               </div>
 
-              <!-- Quick Viewer Actions: Receive from Mobile + Merge Button + Open in Tab + Print Document + Maximize / Fullscreen -->
+              <!-- Quick Viewer Actions: Merge Studio + Open in Tab + Print Document + Maximize / Fullscreen -->
               <div class="flex items-center gap-2 shrink-0 flex-wrap">
-                <button id="open-transfer-modal-btn" class="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition flex items-center gap-1.5 shadow-sm shadow-amber-500/20" title="Receive files directly from customer mobile phone via QR code">
-                  <span>📲</span> <span>Recevoir Mobile</span>
-                </button>
-
-                <button id="viewer-merge-btn" class="hidden px-3 py-1.5 rounded-xl btn-gradient text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Merge selected files">
-                  <span>✨</span> <span>Merge (<span id="viewer-merge-count">0</span>)</span>
+                <button id="viewer-merge-btn" onclick="switchAppMode('merge')" class="hidden px-3.5 py-1.5 rounded-xl btn-gradient text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Open selected files in PDF Merge Studio">
+                  <span>✨</span> <span>Merge Studio (<span id="viewer-merge-count">0</span>)</span>
                 </button>
 
                 <button id="print-current-doc-btn" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5 shadow-sm" title="Print this document">
@@ -820,58 +967,62 @@
             </div>
           </div>
 
-          <!-- Payment Method Selector -->
-          <div class="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex flex-col gap-2">
-            <label class="text-xs font-bold text-slate-600 dark:text-slate-400">Select Payment Method</label>
-            <div class="grid grid-cols-3 gap-2">
-              <button data-method="cash" class="pos-pay-btn selected p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold flex flex-col items-center gap-1 hover:border-indigo-500 transition">
-                <span>💵</span> <span>Cash (Espèces)</span>
-              </button>
-              <button data-method="card" class="pos-pay-btn p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold flex flex-col items-center gap-1 hover:border-indigo-500 transition">
-                <span>💳</span> <span>CIB / Dahabia</span>
-              </button>
-              <button data-method="qr" class="pos-pay-btn p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold flex flex-col items-center gap-1 hover:border-indigo-500 transition">
-                <span>📲</span> <span>BaridiMob / QR</span>
+          <!-- Payment Method: CASH ONLY -->
+          <div class="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between p-3 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 shadow-sm">
+            <div class="flex items-center gap-2.5">
+              <span class="text-xl">💵</span>
+              <div class="flex flex-col">
+                <span class="text-xs font-black text-emerald-800 dark:text-emerald-300">Paiement : Espèces (Cash)</span>
+                <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Mode caisse rapide au comptoir</span>
+              </div>
+            </div>
+            <span class="px-2 py-0.5 rounded-full bg-emerald-200 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 text-[10px] font-extrabold uppercase tracking-wide">Cash</span>
+          </div>
+
+          <!-- Parameter: Allow / Deny Invoice Printing After Checkout -->
+          <div class="p-3 rounded-2xl bg-slate-100/90 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between text-xs shadow-inner">
+            <div class="flex items-center gap-2.5 min-w-0 pr-2">
+              <span class="text-base shrink-0">🖨️</span>
+              <div class="flex flex-col min-w-0">
+                <span class="font-extrabold text-slate-800 dark:text-slate-200 text-xs">Impression du ticket</span>
+                <span id="pos-print-status-label" class="text-[10px] text-slate-400 font-medium truncate">Autorisée (Ticket imprimé après encaissement)</span>
+              </div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer shrink-0">
+              <input type="checkbox" id="pos-toggle-auto-print" class="sr-only peer" checked>
+              <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+            </label>
+          </div>
+
+          <!-- Smart Tender Preset Chips (1-Tap Fast Checkout) -->
+          <div id="pos-smart-tender-section" class="flex flex-col gap-1.5 pt-2 border-t border-slate-200/60 dark:border-slate-800">
+            <div class="flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-slate-400">
+              <span class="flex items-center gap-1"><span>⚡</span> <span>Rendu Express (1 Clic) :</span></span>
+              <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">Touche Espace = Exact</span>
+            </div>
+            <div id="pos-smart-tender-chips" class="grid grid-cols-4 gap-1.5">
+              <button data-tender="exact" class="smart-tender-chip p-2 rounded-xl bg-emerald-100/90 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 font-mono font-bold text-xs border border-emerald-300/80 dark:border-emerald-700 text-center truncate">
+                Exact
               </button>
             </div>
           </div>
 
-          <!-- Dynamic QR Payment Modal Box -->
-          <div id="pos-qr-box" class="hidden p-4 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/70 dark:to-purple-950/50 rounded-2xl border border-indigo-200 dark:border-indigo-800 flex flex-col items-center text-center gap-3 shadow-md">
-            <div class="flex items-center justify-between w-full border-b border-indigo-100 dark:border-indigo-900/60 pb-2">
-              <span class="text-xs font-black text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
-                <span>📲</span> Scanner pour Payer
-              </span>
-              <span id="pos-qr-order-ref" class="text-[10px] font-mono text-slate-400 font-bold">DZ-000000</span>
+          <!-- Checkout Action Buttons (Cash & Credit) -->
+          <div class="flex flex-col gap-2">
+            <button id="pos-checkout-btn" class="btn-gradient w-full py-3.5 px-4 rounded-2xl text-xs font-extrabold text-white shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 transition active:scale-98">
+              <span id="pos-checkout-btn-icon">⚡</span> <span id="pos-checkout-btn-text">Encaisser en Espèces (Espace)</span>
+            </button>
+
+            <button id="pos-credit-checkout-btn" class="w-full py-3 px-4 rounded-2xl text-xs font-extrabold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-700/80 shadow-sm flex items-center justify-center gap-2 transition active:scale-98">
+              <span>🏦</span> <span>Vente à Crédit / Dette (F9)</span>
+            </button>
+
+            <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono px-1">
+              <span>Espace / F12 : Cash</span>
+              <span>Ctrl+D : Remise</span>
+              <span>Ctrl+E : Tiroir</span>
             </div>
-
-            <p class="text-xs font-bold text-slate-700 dark:text-slate-300">
-              Montant : <span id="pos-qr-amount-display" class="font-mono font-black text-indigo-600 dark:text-indigo-400 text-sm">0.00 DA</span>
-            </p>
-
-            <div id="pos-qr-canvas" class="p-3 bg-white rounded-2xl shadow-md border border-indigo-100 flex items-center justify-center"></div>
-
-            <div id="pos-qr-status" class="px-3 py-1 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-1.5 animate-pulse">
-              <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
-              <span>En attente du paiement client...</span>
-            </div>
-
-            <div class="flex items-center gap-2 w-full pt-1">
-              <button id="pos-open-portal-btn" type="button" class="flex-1 py-1.5 px-2 rounded-xl bg-indigo-100 dark:bg-indigo-900/60 hover:bg-indigo-200 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold transition flex items-center justify-center gap-1">
-                <span>↗</span> Ouvrir le Portail
-              </button>
-              <button id="pos-copy-pay-link-btn" type="button" class="py-1.5 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 text-slate-600 dark:text-slate-300 text-[11px] font-bold transition" title="Copier le lien de paiement">
-                📋 Lien
-              </button>
-            </div>
-
-            <p class="text-[10px] text-slate-400">Prise en charge directe : BaridiMob (RIP/QR) • CIB / Edahabia (SATIM)</p>
           </div>
-
-          <!-- Checkout Button -->
-          <button id="pos-checkout-btn" class="btn-gradient w-full py-3 px-4 rounded-xl text-xs font-extrabold text-white shadow-lg flex items-center justify-center gap-2 transition">
-            <span>🧾</span> Complete Checkout & Print Receipt
-          </button>
 
         </div>
 
@@ -885,12 +1036,597 @@
           </div>
         </div>
 
-      </div>
+      </div> <!-- End RIGHT COLUMN: lg:col-span-4 -->
 
     </div>
     <!-- END SECTION 3: POS Terminal -->
 
+    <!-- SECTION 4: Dedicated Inventory & Stock Management -->
+    <div id="section-inventory-app" class="workspace-section hidden flex flex-col gap-6">
+      
+      <!-- Top Actions & Filters Card -->
+      <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl">📦</span>
+            <div>
+              <h2 class="text-base font-extrabold text-slate-800 dark:text-slate-100">Inventory & Catalog Management</h2>
+              <p class="text-xs text-slate-400">Manage products, stock levels, pricing, cost of goods, and barcodes</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 flex-wrap">
+            <button onclick="openProductModal()" class="btn-gradient text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5 transition">
+              <span>➕</span> <span>New Product</span>
+            </button>
+            <button onclick="openCategoryManagerModal()" class="px-3.5 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold transition flex items-center gap-1.5">
+              <span>🏷️</span> <span>Gérer Catégories</span>
+            </button>
+            <button onclick="document.getElementById('export-inventory-csv-btn')?.click()" class="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5">
+              <span>📊</span> <span>Export CSV</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Inventory KPI Stat Cards -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+          <div class="p-3.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 flex flex-col">
+            <span class="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">Total Products</span>
+            <span id="inv-stat-total-products" class="text-lg font-black text-indigo-700 dark:text-indigo-300 font-mono mt-0.5">0 items</span>
+          </div>
+          <div class="p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/50 flex flex-col">
+            <span class="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Total Stock Count</span>
+            <span id="inv-stat-total-units" class="text-lg font-black text-emerald-700 dark:text-emerald-300 font-mono mt-0.5">0 units</span>
+          </div>
+          <div class="p-3.5 rounded-2xl bg-purple-50/70 dark:bg-purple-950/40 border border-purple-100 dark:border-purple-900/50 flex flex-col">
+            <span class="text-[10px] font-bold text-purple-500 uppercase tracking-wider">Total Retail Value</span>
+            <span id="inv-stat-retail-value" class="text-lg font-black text-purple-700 dark:text-purple-300 font-mono mt-0.5">0.00 DA</span>
+          </div>
+          <div class="p-3.5 rounded-2xl bg-amber-50/70 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-900/50 flex flex-col">
+            <span class="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Low / Out of Stock</span>
+            <span id="inv-stat-low-count" class="text-lg font-black text-amber-700 dark:text-amber-300 font-mono mt-0.5">0 alerts</span>
+          </div>
+        </div>
+
+        <!-- Filter & Search Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-200/60 dark:border-slate-800">
+          <div class="relative flex-1 min-w-[240px]">
+            <input type="text" id="inventory-search-input" placeholder="Search by product name, category, barcode or SKU..." class="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
+            <span class="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
+          </div>
+
+          <div class="flex items-center gap-2 flex-wrap">
+            <select id="inventory-category-filter" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none">
+              <option value="all">All Categories</option>
+              <option value="Beverage">Beverages</option>
+              <option value="Bakery">Bakery</option>
+              <option value="Printing">Printing</option>
+              <option value="Electronics">Electronics</option>
+              <option value="Supplies">Supplies</option>
+              <option value="Other">Other</option>
+            </select>
+
+            <select id="inventory-stock-filter" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none">
+              <option value="all">All Stock Levels</option>
+              <option value="in_stock">In Stock (>10)</option>
+              <option value="low_stock">Low Stock (≤10)</option>
+              <option value="out_of_stock">Out of Stock (0)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inventory Data Table Card -->
+      <div class="glass-panel rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left data-table">
+            <thead class="bg-slate-100/80 dark:bg-slate-900/80 border-b border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-400">
+              <tr>
+                <th class="w-12 text-center">Icon</th>
+                <th>Product Name</th>
+                <th>Category</th>
+                <th>Barcode / SKU</th>
+                <th class="text-right">Cost (COGS)</th>
+                <th class="text-right">Selling Price</th>
+                <th class="text-center">Stock Count</th>
+                <th class="text-center">Status</th>
+                <th class="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="inventory-table-body" class="divide-y divide-slate-200/60 dark:divide-slate-800/60">
+              <tr>
+                <td colspan="9" class="p-8 text-center text-slate-400 text-xs">Loading inventory records...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+    <!-- END SECTION 4: Inventory -->
+
+    <!-- SECTION 5: Dedicated Sales & Financial Analytics Dashboard -->
+    <div id="section-analytics-app" class="workspace-section hidden flex flex-col gap-6">
+      
+      <!-- Analytics Header & Time Filter -->
+      <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl">📈</span>
+            <div>
+              <h2 class="text-base font-extrabold text-slate-800 dark:text-slate-100">Financial & Sales Intelligence</h2>
+              <p class="text-xs text-slate-400">Local real-time revenue, profit margins, top sellers, and COGS calculations</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button onclick="document.getElementById('export-sales-csv-btn')?.click()" class="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5">
+              <span>📑</span> <span>Export Sales CSV</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Period Selector Pills -->
+        <div class="flex items-center gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-800">
+          <span class="text-xs font-bold text-slate-500">Analysis Window:</span>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <button data-window="today" class="analytics-filter-btn px-3 py-1 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition">Today</button>
+            <button data-window="7days" class="analytics-filter-btn px-3 py-1 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition">Last 7 Days</button>
+            <button data-window="30days" class="analytics-filter-btn active px-3 py-1 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow-sm transition">Last 30 Days</button>
+            <button data-window="all" class="analytics-filter-btn px-3 py-1 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition">All Time</button>
+          </div>
+        </div>
+
+        <!-- Top 4 KPI Metric Cards -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+          <div class="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 flex flex-col">
+            <span class="text-[11px] font-extrabold text-indigo-500 uppercase tracking-wider">Gross Revenue</span>
+            <span id="page-analytics-revenue" class="text-xl font-black text-indigo-700 dark:text-indigo-300 font-mono mt-1">0.00 DA</span>
+            <span id="page-analytics-orders" class="text-[10px] text-slate-400 mt-0.5">0 transactions</span>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/50 flex flex-col">
+            <span class="text-[11px] font-extrabold text-emerald-500 uppercase tracking-wider">Net Profit</span>
+            <span id="page-analytics-profit" class="text-xl font-black text-emerald-700 dark:text-emerald-300 font-mono mt-1">0.00 DA</span>
+            <span id="page-analytics-margin" class="text-[10px] text-emerald-600 font-bold mt-0.5">0.0% margin</span>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-900/50 flex flex-col">
+            <span class="text-[11px] font-extrabold text-amber-600 uppercase tracking-wider">Inventory COGS</span>
+            <span id="page-analytics-cogs" class="text-xl font-black text-amber-700 dark:text-amber-300 font-mono mt-1">0.00 DA</span>
+            <span class="text-[10px] text-slate-400 mt-0.5">Cost of goods sold</span>
+          </div>
+
+          <div class="p-4 rounded-2xl bg-purple-50/70 dark:bg-purple-950/40 border border-purple-100 dark:border-purple-900/50 flex flex-col">
+            <span class="text-[11px] font-extrabold text-purple-600 uppercase tracking-wider">Avg Basket Value</span>
+            <span id="page-analytics-basket" class="text-xl font-black text-purple-700 dark:text-purple-300 font-mono mt-1">0.00 DA</span>
+            <span id="page-analytics-items" class="text-[10px] text-slate-400 mt-0.5">0 items sold</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Two-Column Grid: Top Sellers & Low Stock Alerts -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- Top Sellers Leaderboard -->
+        <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-3">
+          <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+            <span>🏆</span> <span>Top Selling Products</span>
+          </h3>
+          <div id="page-analytics-top-sellers" class="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
+            <span class="text-slate-400 text-xs text-center py-6">No sales recorded yet.</span>
+          </div>
+        </div>
+
+        <!-- Low Stock Alerts & Urgency List -->
+        <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <span>⚠️</span> <span>Low Stock & Depletion Warnings</span>
+            </h3>
+            <button onclick="switchAppMode('inventory')" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold">Manage Stock ↗</button>
+          </div>
+          <div id="page-analytics-low-stock" class="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
+            <span class="text-slate-400 text-xs text-center py-6">All stock levels are optimal.</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Complete Transaction History Register -->
+      <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+            <span>🧾</span> <span>Transaction & Sales Register</span>
+          </h3>
+          <span class="text-xs text-slate-400 font-mono">Last 50 transactions</span>
+        </div>
+        <div id="page-analytics-register" class="flex flex-col gap-2 max-h-96 overflow-y-auto pr-1">
+          <div class="text-slate-400 text-xs text-center py-8">No transaction history recorded yet.</div>
+        </div>
+      </div>
+
+    </div>
+    <!-- END SECTION 5: Analytics -->
+
+    <!-- SECTION 6: Dedicated PDF Merge Studio Workspace -->
+    <div id="section-merge-app" class="workspace-section hidden flex flex-col gap-6">
+      
+      <div class="glass-panel p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl">✨</span>
+            <div>
+              <h2 class="text-base font-extrabold text-slate-800 dark:text-slate-100">PDF Multi-File Merge Studio</h2>
+              <p class="text-xs text-slate-400">Combine multiple PDF exams, documents, or lesson files into a single merged document</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 flex-wrap">
+            <button onclick="switchAppMode('print')" class="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5">
+              <span>📁</span> <span>Browse Document Explorer</span>
+            </button>
+            <label class="px-3.5 py-2 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm">
+              <span>➕</span> <span>Upload Local PDF Files</span>
+              <input type="file" id="studio-upload-pdf-input" accept=".pdf,application/pdf" multiple class="hidden">
+            </label>
+            <button id="studio-clear-queue-btn" class="px-3 py-2 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 text-xs font-bold transition">
+              Clear Queue
+            </button>
+          </div>
+        </div>
+
+        <!-- Merge Queue List -->
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+            <span>Document Queue (<span id="studio-merge-count">0</span> files):</span>
+            <span class="text-[11px] text-slate-400 font-normal">Files will be combined in this exact top-to-bottom order</span>
+          </div>
+
+          <div id="studio-merge-list" class="min-h-[160px] max-h-80 overflow-y-auto p-3 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col gap-2 text-xs">
+            <div class="text-slate-400 text-center py-12 flex flex-col items-center gap-2">
+              <span class="text-3xl">📑</span>
+              <span>No documents added to the merge queue yet.</span>
+              <button onclick="switchAppMode('print')" class="text-indigo-600 dark:text-indigo-400 font-bold hover:underline">Browse Document Explorer</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Merged File Settings -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200/60 dark:border-slate-800">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">New Merged Filename</label>
+            <div class="flex items-center gap-2">
+              <input type="text" id="studio-merge-filename" value="Combined_Exams_Full.pdf" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Save Target Folder (Optional)</label>
+            <input type="text" id="studio-merge-folder" placeholder="e.g. /1AP/Trimestre_1 (empty for root)" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex flex-wrap items-center justify-end gap-2.5 pt-3 border-t border-slate-200/60 dark:border-slate-800">
+          <button id="studio-merge-download-btn" class="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+            <span>⬇️</span> Download Merged PDF
+          </button>
+          <button id="studio-merge-print-btn" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold transition flex items-center gap-1.5 shadow-md shadow-emerald-600/30">
+            <span>🖨️</span> Merge & Print
+          </button>
+          <button id="studio-merge-save-btn" class="px-5 py-2.5 rounded-xl btn-gradient text-white text-xs font-extrabold transition flex items-center gap-1.5 shadow-md">
+            <span>💾</span> Save New File to Disk
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+    <!-- END SECTION 6: Merge -->
+
+    <!-- SECTION 7: Dedicated Mobile File DropZone Workspace -->
+    <div id="section-transfer-app" class="workspace-section hidden flex flex-col gap-6">
+      
+      <div class="glass-panel p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col items-center text-center gap-5 max-w-2xl mx-auto w-full">
+        
+        <div class="flex flex-col items-center gap-1">
+          <div class="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center text-2xl mb-1 shadow-sm">
+            📲
+          </div>
+          <h2 class="text-base font-extrabold text-slate-800 dark:text-slate-100">Mobile-to-PC File Reception Station</h2>
+          <p class="text-xs text-slate-400 max-w-md">Customers scan the QR code with their mobile phone camera to instantly upload documents, photos, or homework directly to this PC.</p>
+        </div>
+
+        <!-- High-Contrast QR Code Container -->
+        <div class="flex flex-col items-center gap-3">
+          <div class="p-4 bg-white rounded-3xl border border-indigo-100 shadow-lg flex items-center justify-center">
+            <div id="page-transfer-qr-canvas"></div>
+          </div>
+
+          <!-- Network Mode Switcher: Cloud (Anywhere / 4G) vs Local Wi-Fi -->
+          <div class="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs">
+            <button id="transfer-mode-cloud-btn" type="button" class="px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 bg-indigo-600 text-white shadow-sm">
+              <span>🌐</span> <span>Cloud (4G / Anywhere)</span>
+            </button>
+            <button id="transfer-mode-local-btn" type="button" class="px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900">
+              <span>📶</span> <span>Local Wi-Fi</span>
+            </button>
+          </div>
+
+          <!-- Active URL display -->
+          <div class="flex items-center gap-2 max-w-sm text-center px-3 py-1 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+            <span class="text-[11px] text-indigo-600 dark:text-indigo-400 font-mono font-bold break-all" id="page-transfer-target-url">Loading URL...</span>
+            <button id="page-transfer-copy-url-btn" type="button" class="text-xs text-slate-400 hover:text-indigo-600 p-1" title="Copy URL">📋</button>
+          </div>
+        </div>
+
+        <!-- Live Connection Status Badge -->
+        <div id="page-transfer-status-badge" class="px-4 py-1.5 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-2 animate-pulse">
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+          <span id="page-transfer-status-text">Waiting for customer mobile connection...</span>
+        </div>
+
+        <!-- Folder Notice & Test Button -->
+        <div class="w-full p-3.5 bg-indigo-50/70 dark:bg-indigo-950/40 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-between text-xs text-left">
+          <div>
+            <span class="font-bold text-indigo-900 dark:text-indigo-200">Local Intake Destination:</span>
+            <p class="font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">📁 uploads/ (Protected Storage)</p>
+          </div>
+          <button id="page-transfer-test-btn" type="button" class="px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 text-indigo-700 dark:text-indigo-300 text-xs font-bold shadow-sm transition">
+            Test on Browser ↗
+          </button>
+        </div>
+
+        <!-- Live Received Files Stream -->
+        <div class="w-full flex flex-col gap-2 text-left pt-2 border-t border-slate-200/60 dark:border-slate-800">
+          <div class="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+            <span class="flex items-center gap-1.5">
+              <span>📥</span> <span>Recently Received Files:</span>
+            </span>
+            <div class="flex items-center gap-2">
+              <span id="page-transfer-count" class="font-mono font-bold text-emerald-600">0 files</span>
+              <button id="page-transfer-clear-btn" type="button" class="px-2.5 py-1 rounded-lg text-[11px] bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 font-bold transition">Clear Stream</button>
+            </div>
+          </div>
+          <div id="page-transfer-list" class="min-h-[120px] max-h-60 overflow-y-auto p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col gap-1.5 text-xs">
+            <div class="text-slate-400 text-center py-6 text-xs">No files received from customer phones yet.</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+    <!-- END SECTION 7: Transfer -->
+
+    <!-- SECTION 8: Dedicated Settings, Backup & Hardware Configuration -->
+    <div id="section-settings-app" class="workspace-section hidden flex flex-col gap-6">
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+        
+        <!-- Left: Data Safety & System Backup -->
+        <div class="glass-panel p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-5">
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl">💾</span>
+            <div>
+              <h3 class="text-base font-extrabold text-slate-800 dark:text-slate-100">Local Data Safety & Backup</h3>
+              <p class="text-xs text-slate-400">Export & restore full offline IndexedDB databases and accounting spreadsheets</p>
+            </div>
+          </div>
+
+          <!-- Full System Snapshot (JSON) -->
+          <div class="p-4 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 flex flex-col gap-3">
+            <h4 class="text-xs font-bold text-indigo-700 dark:text-indigo-300">Full System Snapshot (JSON)</h4>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">Backs up all products, sales history, sale items, and inventory audit logs into a portable JSON file.</p>
+            <div class="flex items-center gap-2 flex-wrap">
+              <button onclick="document.getElementById('export-json-btn')?.click()" class="btn-gradient text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5">
+                <span>⬇️</span> <span>Export Database JSON</span>
+              </button>
+              <label class="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold cursor-pointer transition flex items-center gap-1.5">
+                <span>⬆️</span> <span>Restore from JSON</span>
+                <input type="file" onchange="window.restoreDatabaseFromJsonFile ? window.restoreDatabaseFromJsonFile(this.files[0]) : (document.getElementById('import-json-input') && (document.getElementById('import-json-input').files = this.files)); this.value = '';" accept=".json,application/json" class="hidden">
+              </label>
+            </div>
+          </div>
+
+          <!-- CSV Spreadsheet Reports -->
+          <div class="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex flex-col gap-3">
+            <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300">Spreadsheet Reports (CSV)</h4>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">Export clean tabular data ready for Microsoft Excel, Google Sheets, or accounting software.</p>
+            <div class="flex items-center gap-2 flex-wrap">
+              <button onclick="document.getElementById('export-inventory-csv-btn')?.click()" class="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+                <span>📊</span> <span>Inventory List (CSV)</span>
+              </button>
+              <button onclick="document.getElementById('export-sales-csv-btn')?.click()" class="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+                <span>📑</span> <span>Sales Register (CSV)</span>
+              </button>
+              <button id="export-debts-csv-btn" class="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+                <span>🏦</span> <span>Customer Debts (CSV)</span>
+              </button>
+              <button id="export-debt-payments-csv-btn" class="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+                <span>🧾</span> <span>Repayment Logs (CSV)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Barcode Scanner & Network Setup -->
+        <div class="glass-panel p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-5">
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl">⚙️</span>
+            <div>
+              <h3 class="text-base font-extrabold text-slate-800 dark:text-slate-100">Barcode Scanner & LAN Setup</h3>
+              <p class="text-xs text-slate-400">Configure USB/Bluetooth gun timing thresholds, beeps, and network IP</p>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-4 text-xs">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Timing Threshold (ms)</label>
+                <input type="number" id="settings-threshold-input" value="50" min="15" max="150" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold">
+              </div>
+
+              <div>
+                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Min Barcode Length</label>
+                <input type="number" id="settings-min-len-input" value="4" min="2" max="30" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Suffix Terminator Key</label>
+                <select id="settings-suffix-select" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold">
+                  <option value="Enter">Enter Key (Default)</option>
+                  <option value="Tab">Tab Key</option>
+                  <option value="None">None</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Audio Beep on Scan</label>
+                <div class="flex items-center gap-2 pt-1">
+                  <input type="checkbox" id="settings-sound-toggle" checked class="rounded text-indigo-600 w-4 h-4">
+                  <span class="font-medium text-slate-600 dark:text-slate-400">Play Beep</span>
+                  <button type="button" onclick="document.getElementById('test-beep-btn')?.click()" class="ml-auto px-2 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 text-[11px] font-bold">🔊 Test</button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Mobile QR Host Address (Wi-Fi / LAN)</label>
+              <div class="flex items-center gap-2">
+                <input type="text" id="settings-host-input" placeholder="http://192.168.1.11:3000" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs text-indigo-600 dark:text-indigo-400 font-bold">
+                <button type="button" onclick="document.getElementById('detect-host-btn')?.click()" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold whitespace-nowrap hover:bg-slate-200 text-xs">🔄 Auto-Detect</button>
+              </div>
+            </div>
+
+            <!-- Receipt & Invoice Auto-Printing Parameter -->
+            <div class="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <div class="flex flex-col">
+                <span class="font-bold text-slate-800 dark:text-slate-200">Impression automatique du ticket (Facture / Reçu)</span>
+                <span class="text-[11px] text-slate-400">Autoriser ou refuser l'ouverture de l'impression après encaissement</span>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
+                <input type="checkbox" id="settings-auto-print-toggle" class="sr-only peer" checked>
+                <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
+            </div>
+
+            <!-- Hardware Gun Live Test Area -->
+            <div class="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700">
+              <p class="font-bold text-slate-700 dark:text-slate-300 mb-1">Interactive Hardware Test Area</p>
+              <p class="text-[11px] text-slate-500 mb-2">Scan any physical barcode with your USB/Bluetooth gun now:</p>
+              <div class="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-dashed border-indigo-300 dark:border-indigo-700 font-mono text-center">
+                <span id="settings-test-output" class="text-indigo-600 dark:text-indigo-400 font-bold">Waiting for barcode gun scan...</span>
+              </div>
+            </div>
+
+            <button id="settings-save-btn" class="btn-gradient text-white py-2.5 px-4 rounded-xl text-xs font-bold shadow-md">
+              Save Hardware Settings
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+    <!-- END SECTION 8: Settings -->
+
+    <!-- SECTION 9: Customer Debts & Credit Ledger Workspace -->
+    <div id="section-debts-app" class="workspace-section hidden flex flex-col gap-6">
+
+      <!-- Top KPI Summary Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-4 bg-white/70 dark:bg-slate-900/70">
+          <div class="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 text-2xl flex items-center justify-center shrink-0">
+            💳
+          </div>
+          <div class="flex flex-col min-w-0">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Total Créances Dues</span>
+            <span id="debts-stat-total-outstanding" class="text-xl font-black font-mono text-rose-600 dark:text-rose-400 truncate">0 DA</span>
+            <span class="text-[10px] text-slate-400">Montant total restant à recouvrer</span>
+          </div>
+        </div>
+
+        <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-4 bg-white/70 dark:bg-slate-900/70">
+          <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-2xl flex items-center justify-center shrink-0">
+            👥
+          </div>
+          <div class="flex flex-col min-w-0">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Clients Débiteurs</span>
+            <span id="debts-stat-active-customers" class="text-xl font-black text-slate-800 dark:text-slate-100 truncate">0 client(s)</span>
+            <span class="text-[10px] text-slate-400">Clients avec solde impayé</span>
+          </div>
+        </div>
+
+        <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-4 bg-white/70 dark:bg-slate-900/70">
+          <div class="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 text-2xl flex items-center justify-center shrink-0">
+            📑
+          </div>
+          <div class="flex flex-col min-w-0">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Dossiers en Cours</span>
+            <span id="debts-stat-open-debts" class="text-xl font-black text-slate-800 dark:text-slate-100 truncate">0 créance(s)</span>
+            <span class="text-[10px] text-slate-400">Créances ouvertes non soldées</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Toolbar & Filters -->
+      <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/70 dark:bg-slate-900/70">
+        <div class="flex items-center gap-2 flex-wrap flex-1">
+          <div class="relative w-full sm:w-64">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-xs">🔍</span>
+            <input type="text" id="debts-search-input" placeholder="Rechercher nom ou téléphone..." class="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-xs outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+
+          <!-- Status Filters -->
+          <div class="inline-flex rounded-xl p-1 bg-slate-100 dark:bg-slate-800 text-xs font-bold">
+            <button data-filter="all" class="debt-filter-btn active px-3 py-1.5 rounded-lg bg-indigo-600 text-white shadow-sm transition">Tous</button>
+            <button data-filter="unpaid" class="debt-filter-btn px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 transition">Non Soldés</button>
+            <button data-filter="settled" class="debt-filter-btn px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 transition">Soldés</button>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap shrink-0">
+          <button id="debts-export-csv-btn" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center gap-1.5">
+            <span>📥</span> <span>Exporter CSV</span>
+          </button>
+          <button id="debts-new-customer-btn" onclick="openCreateCustomerModal()" class="px-3.5 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold transition flex items-center gap-1.5">
+            <span>👤</span> <span>Nouveau Client</span>
+          </button>
+          <button id="debts-manual-btn" class="btn-gradient text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition">
+            <span>➕</span> <span>Nouvelle Dette</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Debtors Table -->
+      <div class="glass-panel rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden bg-white/70 dark:bg-slate-900/70">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead class="bg-slate-50 dark:bg-slate-800/80 text-slate-400 text-[10px] uppercase font-bold tracking-wider border-b border-slate-200 dark:border-slate-800">
+              <tr>
+                <th class="p-3.5">Client & Contact</th>
+                <th class="p-3.5 text-right">Total Emprunté</th>
+                <th class="p-3.5 text-right">Reste Dû / Plafond</th>
+                <th class="p-3.5 text-center">Plus Ancienne Dette</th>
+                <th class="p-3.5 text-center">Statut</th>
+                <th class="p-3.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="debts-table-body" class="divide-y divide-slate-100 dark:divide-slate-800/80">
+              <tr><td colspan="6" class="p-8 text-center text-slate-400 text-xs">Chargement du carnet de dettes...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+    <!-- END SECTION 9: Customer Debts -->
+
   </main>
+  </div> <!-- End APP MAIN CONTENT WRAPPER -->
 
 
   <!-- Printable Area (Hidden on screen) -->
@@ -901,6 +1637,492 @@
   </div>
 
   
+  <!-- MODAL: Order Details & Invoice Screen -->
+  <div id="pos-order-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <div class="flex items-center gap-2.5">
+          <span class="text-2xl">🧾</span>
+          <div>
+            <h3 class="text-base font-extrabold text-slate-800 dark:text-slate-100">Détails de la Commande</h3>
+            <p class="text-[11px] font-mono text-indigo-600 dark:text-indigo-400 font-bold" id="order-modal-ref">DZ-000000</p>
+          </div>
+        </div>
+        <button id="close-order-modal-btn" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg transition">✕</button>
+      </div>
+
+      <!-- Order Summary Card -->
+      <div class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between text-xs">
+        <div class="flex flex-col gap-0.5">
+          <span class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Date & Mode</span>
+          <span id="order-modal-date" class="font-semibold text-slate-700 dark:text-slate-200">--</span>
+          <span class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+            <span>💵</span> <span id="order-modal-payment">Espèces (Cash)</span>
+          </span>
+        </div>
+        <div class="flex flex-col items-end">
+          <span class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Montant Total</span>
+          <span id="order-modal-total" class="text-lg font-black font-mono text-indigo-600 dark:text-indigo-400">0.00 DA</span>
+          <span id="order-modal-items-count" class="text-[10px] text-slate-400">0 article(s)</span>
+        </div>
+      </div>
+
+      <!-- Purchased Items Table -->
+      <div class="flex flex-col gap-1.5">
+        <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Articles Commandés</span>
+        <div class="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-900">
+          <table class="w-full text-xs text-left">
+            <thead class="bg-slate-50 dark:bg-slate-800/60 text-slate-400 text-[10px] uppercase font-bold border-b border-slate-200 dark:border-slate-800">
+              <tr>
+                <th class="p-2.5">Article</th>
+                <th class="p-2.5 text-center">Qté</th>
+                <th class="p-2.5 text-right">Prix</th>
+                <th class="p-2.5 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody id="order-modal-items-body" class="divide-y divide-slate-100 dark:divide-slate-800">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Financial Totals Box -->
+      <div class="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200/60 dark:border-slate-700/50 flex flex-col gap-1.5 text-xs">
+        <div class="flex justify-between text-slate-500">
+          <span>Sous-total :</span>
+          <span id="order-modal-subtotal" class="font-mono font-semibold">0.00 DA</span>
+        </div>
+        <div id="order-modal-discount-row" class="hidden flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
+          <span>Remise :</span>
+          <span id="order-modal-discount" class="font-mono">-0.00 DA</span>
+        </div>
+        <div class="flex justify-between pt-1.5 border-t border-slate-200 dark:border-slate-700 font-extrabold text-slate-900 dark:text-slate-100 text-sm">
+          <span>Total Payé :</span>
+          <span id="order-modal-final-total" class="font-mono text-indigo-600 dark:text-indigo-400">0.00 DA</span>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-2 pt-1">
+        <button id="order-modal-print-btn" class="btn-gradient flex-1 py-2.5 px-4 rounded-xl text-xs font-bold text-white shadow-md flex items-center justify-center gap-2">
+          <span>🖨️</span> <span>Imprimer le Ticket de Caisse</span>
+        </button>
+        <button id="order-modal-close-action-btn" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition">
+          Fermer
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL: Change Due HUD Display (Immediate High-Speed Feedback) -->
+  <div id="pos-change-hud" class="hidden fixed inset-0 bg-slate-900/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border-2 border-emerald-500/80 rounded-3xl p-7 max-w-md w-full shadow-2xl flex flex-col items-center text-center gap-5 relative overflow-hidden animate-fade-in">
+      <!-- Auto-dismiss Top Countdown Progress Bar -->
+      <div id="pos-change-hud-progress" class="absolute top-0 left-0 h-1.5 bg-emerald-500 w-full transition-all duration-[3500ms] ease-linear"></div>
+
+      <div class="w-16 h-16 rounded-3xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 text-3xl flex items-center justify-center shadow-inner">
+        💵
+      </div>
+
+      <div class="flex flex-col gap-0.5">
+        <span class="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Paiement Encaissé avec Succès</span>
+        <h3 class="text-base font-extrabold text-slate-800 dark:text-slate-100" id="pos-change-hud-order-ref">Ticket DZ-000000</h3>
+      </div>
+
+      <!-- Financial Calculation Matrix -->
+      <div class="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 flex flex-col gap-2.5 text-xs">
+        <div class="flex items-center justify-between text-slate-600 dark:text-slate-400">
+          <span>Net à Payer :</span>
+          <span id="pos-change-hud-total" class="font-mono font-bold text-slate-900 dark:text-slate-100 tabular-nums">0.00 DA</span>
+        </div>
+        <div class="flex items-center justify-between text-slate-600 dark:text-slate-400">
+          <span>Espèces Reçues :</span>
+          <span id="pos-change-hud-tendered" class="font-mono font-bold text-emerald-600 tabular-nums">0.00 DA</span>
+        </div>
+        <div class="pt-2 border-t border-slate-200 dark:border-slate-700 flex flex-col items-center">
+          <span class="text-[11px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Monnaie à Rendre au Client</span>
+          <span id="pos-change-hud-change" class="text-3xl font-black font-mono text-emerald-600 dark:text-emerald-400 tabular-nums tracking-tight mt-1">0.00 DA</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 w-full pt-1">
+        <button id="pos-change-hud-dismiss-btn" class="btn-gradient flex-1 py-3 px-4 rounded-2xl text-xs font-extrabold text-white shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 transition active:scale-98">
+          <span>✓</span> <span>Nouvelle Vente (Entrée / Espace)</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: POS Credit / Debt Checkout -->
+  <div id="pos-credit-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">🏦</span>
+          <div>
+            <h3 class="text-base font-extrabold text-slate-800 dark:text-slate-100">Encaissement à Crédit</h3>
+            <p class="text-[11px] text-slate-400">Enregistrer la vente au compte d'un client</p>
+          </div>
+        </div>
+        <button id="pos-close-credit-modal-btn" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg transition">✕</button>
+      </div>
+
+      <div class="flex flex-col gap-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Nom du Client *</label>
+          <div class="relative">
+            <input type="text" id="pos-credit-customer-name" list="pos-credit-customers-list" placeholder="Ex: Mohamed Benali" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-semibold text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
+            <datalist id="pos-credit-customers-list"></datalist>
+          </div>
+          <span class="text-[10px] text-slate-400 mt-0.5 block">Sélectionnez un client existant ou tapez un nouveau nom</span>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Téléphone (Optionnel)</label>
+          <input type="tel" id="pos-credit-customer-phone" placeholder="Ex: 0550 12 34 56" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <!-- Live Customer Credit / Sleep Status Feedback -->
+        <div id="pos-credit-customer-status-card" class="hidden p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex flex-col gap-1.5">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-slate-600 dark:text-slate-300" id="pos-credit-card-cust-name">Client Existant</span>
+            <span id="pos-credit-card-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">🟢 Actif</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-[11px] font-mono">
+            <div>Dette en cours : <strong id="pos-credit-card-owed" class="text-rose-600 font-bold">0.00 DA</strong></div>
+            <div>Plafond max : <strong id="pos-credit-card-limit" class="text-amber-600 font-bold">Illimité</strong></div>
+          </div>
+          <div id="pos-credit-card-sleep-warning" class="hidden p-2 rounded-xl bg-rose-100 dark:bg-rose-950/80 border border-rose-300 dark:border-rose-700 text-rose-800 dark:text-rose-200 font-bold text-[11px] flex items-center gap-2 animate-pulse">
+            <span>😴</span> <span>Client en Mode Veille ! Plafond de dette atteint. Règlement exigé avant nouveau crédit.</span>
+          </div>
+        </div>
+
+        <!-- Initial Debt Limit for New Customer -->
+        <div id="pos-credit-new-limit-container" class="hidden">
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Plafond de crédit pour ce nouveau client (DA)</label>
+          <input type="number" id="pos-credit-new-limit" value="0" min="0" step="500" placeholder="0 = Illimité" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
+          <span class="text-[10px] text-slate-400 mt-0.5 block">0 = Illimité. Si la dette atteint ce montant, le client passe en Mode Veille.</span>
+        </div>
+
+        <div class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 flex flex-col gap-2">
+          <div class="flex items-center justify-between text-slate-600 dark:text-slate-400">
+            <span>Total Commande (après remise) :</span>
+            <span id="pos-credit-total-display" class="font-mono font-bold text-slate-800 dark:text-slate-100 text-sm">0.00 DA</span>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Acompte Payé Maintenant (Cash) :</label>
+            <div class="relative">
+              <input type="number" id="pos-credit-paid-now" value="0" min="0" step="10" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono font-bold text-emerald-600 outline-none focus:ring-2 focus:ring-indigo-500">
+              <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none font-bold text-slate-400 text-xs">DA</span>
+            </div>
+            <span class="text-[10px] text-slate-400 mt-0.5 block">0 DA si tout est pris à crédit</span>
+          </div>
+
+          <div class="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700 font-bold">
+            <span class="text-rose-600 dark:text-rose-400">Reste Dû (Dette) :</span>
+            <span id="pos-credit-remaining-display" class="font-mono font-black text-rose-600 dark:text-rose-400 text-base">0.00 DA</span>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Note ou Motif (Optionnel)</label>
+          <input type="text" id="pos-credit-note" placeholder="Ex: Paiement promis samedi" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 pt-2">
+        <button id="pos-confirm-credit-btn" class="btn-gradient flex-1 py-3 px-4 rounded-xl text-xs font-bold text-white shadow-md flex items-center justify-center gap-2">
+          <span>✓</span> <span>Valider la Vente à Crédit</span>
+        </button>
+        <button id="pos-cancel-credit-modal-btn" class="px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition">
+          Annuler
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Add Manual Debt -->
+  <div id="debt-manual-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">➕</span>
+          <div>
+            <h3 class="text-base font-extrabold text-slate-800 dark:text-slate-100">Nouvelle Dette Manuelle</h3>
+            <p class="text-[11px] text-slate-400">Enregistrer une créance avec contrôle du plafond client</p>
+          </div>
+        </div>
+        <button id="debts-close-manual-btn" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg transition">✕</button>
+      </div>
+
+      <div class="flex flex-col gap-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Nom du Client *</label>
+          <div class="relative">
+            <input type="text" id="debt-manual-name" list="debt-manual-customers-list" placeholder="Ex: Karim Hadj" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-semibold text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
+            <datalist id="debt-manual-customers-list"></datalist>
+          </div>
+          <span class="text-[10px] text-slate-400 mt-0.5 block">Sélectionnez un client ou tapez un nouveau nom</span>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Téléphone (Optionnel)</label>
+          <input type="tel" id="debt-manual-phone" placeholder="Ex: 0661 00 00 00" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <!-- Live Status Feedback for Manual Debt -->
+        <div id="debt-manual-customer-status-card" class="hidden p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex flex-col gap-1.5">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-slate-600 dark:text-slate-300" id="debt-manual-card-cust-name">Client Existant</span>
+            <span id="debt-manual-card-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">🟢 Actif</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-[11px] font-mono">
+            <div>Dette en cours : <strong id="debt-manual-card-owed" class="text-rose-600 font-bold">0.00 DA</strong></div>
+            <div>Plafond max : <strong id="debt-manual-card-limit" class="text-amber-600 font-bold">Illimité</strong></div>
+          </div>
+          <div id="debt-manual-card-sleep-warning" class="hidden p-2 rounded-xl bg-rose-100 dark:bg-rose-950/80 border border-rose-300 dark:border-rose-700 text-rose-800 dark:text-rose-200 font-bold text-[11px] flex items-center gap-2 animate-pulse">
+            <span>😴</span> <span>Client en Mode Veille ! Plafond de dette atteint. Règlement requis.</span>
+          </div>
+        </div>
+
+        <!-- Initial Debt Limit for New Customer in Manual Debt -->
+        <div id="debt-manual-new-limit-container" class="hidden">
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Plafond de dette pour ce nouveau client (DA)</label>
+          <input type="number" id="debt-manual-new-limit" value="0" min="0" step="500" placeholder="0 = Illimité" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Montant Total (DA) *</label>
+            <input type="number" id="debt-manual-amount" placeholder="0" min="1" step="10" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono font-bold text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Acompte Immédiat (DA)</label>
+            <input type="number" id="debt-manual-paid-now" value="0" min="0" step="10" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono font-bold text-emerald-600 outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Motif / Note (Optionnel)</label>
+          <input type="text" id="debt-manual-note" placeholder="Ex: Impression banderole, réparation, avance" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 pt-2">
+        <button id="debts-save-manual-btn" class="btn-gradient flex-1 py-3 px-4 rounded-xl text-xs font-bold text-white shadow-md flex items-center justify-center gap-2">
+          <span>✓</span> <span>Enregistrer la Dette</span>
+        </button>
+        <button id="debts-cancel-manual-btn" class="px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition">
+          Annuler
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Customer Debt History & Profile -->
+  <div id="debt-customer-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-2xl w-full shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-black text-sm flex items-center justify-center">
+            👤
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="text-base font-extrabold text-slate-800 dark:text-slate-100" id="debt-modal-cust-name">Client</h3>
+              <span id="debt-modal-cust-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">🟢 Actif</span>
+            </div>
+            <div class="flex items-center gap-2 text-[11px] font-mono text-slate-400 mt-0.5">
+              <span id="debt-modal-cust-phone">0550 00 00 00</span>
+              <span>•</span>
+              <span>Plafond : <strong id="debt-modal-cust-limit" class="text-amber-600 font-bold">Illimité</strong></span>
+              <span>•</span>
+              <button id="debt-modal-edit-profile-btn" class="text-indigo-600 dark:text-indigo-400 hover:underline font-bold font-sans">✏️ Modifier Profil</button>
+            </div>
+          </div>
+        </div>
+        <button id="debts-close-customer-modal-btn" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg transition">✕</button>
+      </div>
+
+      <!-- Financial Balance Card -->
+      <div class="grid grid-cols-3 gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 text-xs text-center">
+        <div>
+          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Total Emprunté</span>
+          <span id="debt-modal-cust-total-owed" class="font-mono font-bold text-slate-700 dark:text-slate-300 text-sm">0.00 DA</span>
+        </div>
+        <div>
+          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Total Remboursé</span>
+          <span id="debt-modal-cust-total-paid" class="font-mono font-bold text-emerald-600 text-sm">0.00 DA</span>
+        </div>
+        <div>
+          <span class="text-[10px] uppercase font-bold text-rose-600 dark:text-rose-400 block mb-0.5">Reste à Payer</span>
+          <span id="debt-modal-cust-remaining" class="font-mono font-black text-rose-600 dark:text-rose-400 text-sm">0.00 DA</span>
+        </div>
+      </div>
+
+      <!-- Debts History List -->
+      <div class="flex flex-col gap-2">
+        <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Historique des Dettes & Paiements</span>
+        <div id="debt-modal-debts-list" class="flex flex-col gap-3 max-h-80 overflow-y-auto pr-1">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+        <button onclick="document.getElementById('debt-customer-modal')?.classList.add('hidden')" class="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition">
+          Fermer
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Record Debt Payment -->
+  <div id="debt-payment-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">💵</span>
+          <div>
+            <h3 class="text-base font-extrabold text-slate-800 dark:text-slate-100">Encaisser un Paiement</h3>
+            <p class="text-[11px] text-slate-400" id="debt-pay-customer-name">Client</p>
+          </div>
+        </div>
+        <button id="debts-close-pay-btn" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg transition">✕</button>
+      </div>
+
+      <div class="flex flex-col gap-3 text-xs">
+        <div class="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <span class="text-slate-500 font-medium">Solde restant dû :</span>
+          <span id="debt-pay-max-display" class="font-mono font-bold text-rose-600 text-sm">0.00 DA</span>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Montant Encaissé (DA) *</label>
+          <div class="relative">
+            <input type="number" id="debt-pay-amount-input" min="1" step="10" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono font-black text-emerald-600 text-base outline-none focus:ring-2 focus:ring-emerald-500">
+            <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none font-bold text-slate-400 text-xs">DA</span>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Note de Reçu / Commentaire (Optionnel)</label>
+          <input type="text" id="debt-pay-note-input" placeholder="Ex: Versement en espèces au comptoir" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 pt-2">
+        <button id="debts-confirm-pay-btn" class="btn-gradient flex-1 py-3 px-4 rounded-xl text-xs font-bold text-white shadow-md flex items-center justify-center gap-2">
+          <span>✓</span> <span>Valider l'Encaissement</span>
+        </button>
+        <button id="debts-cancel-pay-btn" class="px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition">
+          Annuler
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Category Management (Add, Edit, Delete) -->
+  <div id="pos-category-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <div class="flex items-center gap-2.5">
+          <span class="text-2xl">🏷️</span>
+          <div>
+            <h3 class="text-base font-extrabold text-slate-800 dark:text-slate-100">Gestion des Catégories de Produits</h3>
+            <p class="text-[11px] text-slate-400">Ajouter, renommer ou supprimer les catégories du magasin</p>
+          </div>
+        </div>
+        <button onclick="closeCategoryManagerModal()" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">✕</button>
+      </div>
+
+      <!-- Add New Category Form -->
+      <div class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 flex flex-col gap-2">
+        <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Ajouter une nouvelle catégorie</span>
+        <div class="flex items-center gap-2">
+          <input type="text" id="cat-mgr-icon-input" value="🏷️" class="w-12 px-2 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-center text-base outline-none" title="Icône / Emoji">
+          <input type="text" id="cat-mgr-name-input" placeholder="Nom de la catégorie (ex: Boissons Chaudes)" class="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
+          <button onclick="handleCreateCategory()" class="btn-gradient px-4 py-2 rounded-xl text-xs font-bold text-white shadow-sm flex items-center gap-1 shrink-0">
+            <span>➕</span> <span>Ajouter</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Categories List -->
+      <div class="flex flex-col gap-2">
+        <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Catégories Enregistrées</span>
+        <div id="cat-mgr-list" class="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+        <button onclick="closeCategoryManagerModal()" class="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition">
+          Fermer
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Create / Edit Customer with Debt Limit -->
+  <div id="debt-customer-create-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <div class="flex items-center gap-2.5">
+          <span class="text-2xl">👤</span>
+          <div>
+            <h3 id="debt-customer-create-title" class="text-base font-extrabold text-slate-800 dark:text-slate-100">Nouveau Client</h3>
+            <p class="text-[11px] text-slate-400">Fiche client et plafond de crédit / dette</p>
+          </div>
+        </div>
+        <button onclick="closeCreateCustomerModal()" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">✕</button>
+      </div>
+
+      <div class="flex flex-col gap-3 text-xs">
+        <input type="hidden" id="debt-cust-edit-id">
+
+        <div>
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Nom Complet du Client *</label>
+          <input type="text" id="debt-cust-name-input" placeholder="Ex: Mohamed Benali" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-semibold text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Numéro de Téléphone (Optionnel)</label>
+          <input type="tel" id="debt-cust-phone-input" placeholder="Ex: 0550 12 34 56" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Plafond de Dette / Crédit Autorisé (DA)</label>
+          <div class="relative">
+            <input type="number" id="debt-cust-limit-input" value="0" min="0" step="500" placeholder="0 = Illimité" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono font-bold text-amber-600 outline-none focus:ring-2 focus:ring-amber-500">
+            <span class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none font-bold text-slate-400 text-xs">DA</span>
+          </div>
+          <span class="text-[10px] text-slate-400 mt-1 block">
+            💡 <em>0 = Illimité. Si la dette atteint ce montant, le client passe en <strong>Mode Veille</strong> (crédit bloqué jusqu'au remboursement).</em>
+          </span>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Notes / Remarques (Optionnel)</label>
+          <textarea id="debt-cust-notes-input" rows="2" placeholder="Ex: Commerce voisin, paiement hebdomadaire..." class="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 pt-2">
+        <button onclick="handleSaveCustomer()" class="btn-gradient flex-1 py-3 px-4 rounded-xl text-xs font-bold text-white shadow-md flex items-center justify-center gap-2">
+          <span>✓</span> <span id="debt-cust-save-btn-text">Enregistrer le Client</span>
+        </button>
+        <button onclick="closeCreateCustomerModal()" class="px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition">
+          Annuler
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL 4: Local Financial & Stock Analytics Dashboard -->
   <div id="pos-analytics-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-4xl w-full shadow-2xl flex flex-col gap-5 max-h-[90vh] overflow-y-auto">
@@ -1329,26 +2551,81 @@
     </div>
   </div>
 
-  <!-- Application Modular Scripts -->
-  <script src="js/app.js"></script>
-  <script src="js/db.js"></script>
-  <script src="js/checkoutService.js"></script>
-  <script src="js/analyticsService.js"></script>
-  <script src="js/backupService.js"></script>
-  <script src="js/qr-generator.js"></script>
-  <script src="js/file-browser.js"></script>
-  <script src="js/printing.js"></script>
-  <script src="js/pos.js"></script>
+  <!-- Core Vendor Libraries (Deferred to unblock initial paint) -->
+  <script src="js/dexie.min.js"></script>
+  <script>
+    if (typeof Dexie === 'undefined') {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"><\/script>');
+    }
+  </script>
+  <script src="js/qr-code-styling.js"></script>
+  <script>
+    if (typeof QRCodeStyling === 'undefined') {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.5.0/lib/qr-code-styling.js"><\/script>');
+    }
+  </script>
+  <script src="js/pdf-lib.min.js"></script>
+
+  <!-- Application Modular Scripts (Cache-Busted v=2.9) -->
+  <script src="js/db.js?v=2.9"></script>
+  <script src="js/checkoutService.js?v=2.9"></script>
+  <script src="js/debtService.js?v=2.9"></script>
+  <script src="js/analyticsService.js?v=2.9"></script>
+  <script src="js/backupService.js?v=2.9"></script>
+  <script src="js/qr-generator.js?v=2.9"></script>
+  <script src="js/file-browser.js?v=2.9"></script>
+  <script src="js/printing.js?v=2.9"></script>
+  <script src="js/pos.js?v=2.9"></script>
+  <script src="js/app.js?v=2.9"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').then(reg => {
           console.log('[PWA] Service Worker registered:', reg.scope);
+          reg.update().catch(() => {});
         }).catch(err => {
           console.log('[PWA] Service Worker registration failed:', err);
         });
       });
     }
+
+    // Direct Self-Healing: If catalog is still showing loading message, force render immediately
+    setTimeout(function() {
+      var grid = document.getElementById('pos-product-grid');
+      if (grid && (grid.innerText.includes('Loading catalog') || !grid.children.length || (grid.children[0] && grid.children[0].innerText.includes('Loading catalog')))) {
+        console.warn('[Self-Healing] Forcing product catalog fetch & render...');
+        if (window.loadPosProducts) {
+          window.loadPosProducts();
+        } else {
+          fetch('/api/pos/products')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+              if (d && d.products && d.products.length && grid) {
+                grid.innerHTML = d.products.map(function(p) {
+                  var price = Number(p.sellingPrice || p.price || 0);
+                  var stock = Number(p.currentStock != null ? p.currentStock : (p.stock != null ? p.stock : 50));
+                  var safeId = String(p.id);
+                  return '<div id="product-card-' + safeId + '" class="glass-panel overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col justify-between group relative bg-white/70 dark:bg-slate-900/70">' +
+                    '<div class="relative w-full h-28 bg-slate-100 dark:bg-slate-800 overflow-hidden flex items-center justify-center text-4xl select-none">' + (p.icon || '📦') +
+                      '<div class="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-900/80 text-white">' + stock + ' in stock</div>' +
+                    '</div>' +
+                    '<div class="p-3 flex flex-col flex-1 justify-between gap-2">' +
+                      '<div>' +
+                        '<span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">' + (p.category || 'General') + '</span>' +
+                        '<h4 class="text-xs font-bold text-slate-800 dark:text-slate-100 line-clamp-1 mt-0.5">' + p.name + '</h4>' +
+                      '</div>' +
+                      '<div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">' +
+                        '<span class="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 font-mono">' + price.toFixed(2) + ' DA</span>' +
+                        '<button onclick="window.addToPosCart ? window.addToPosCart(\'' + safeId + '\') : null" class="btn-gradient text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1"><span>+</span> <span>Add</span></button>' +
+                      '</div>' +
+                    '</div>' +
+                  '</div>';
+                }).join('');
+              }
+            }).catch(function(e) { console.error('Self-healing catalog fetch failed:', e); });
+        }
+      }
+    }, 500);
   </script>
 </body>
 </html>

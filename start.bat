@@ -63,7 +63,7 @@ echo [3/4] Demarrage du tunnel ngrok...
 if defined NGROK_DOMAIN (
     if not "!NGROK_DOMAIN!"=="" (
         echo      Mode : Domaine permanent ^(!NGROK_DOMAIN!^)
-        start /B .\ngrok.exe http --domain=!NGROK_DOMAIN! 3000 --log=stdout > "%TEMP%\millora_ngrok.log" 2>&1
+        start /B .\ngrok.exe http --url=!NGROK_DOMAIN! 3000 --log=stdout > "%TEMP%\millora_ngrok.log" 2>&1
     ) else (
         echo      Mode : URL aleatoire ^(obtenir un domaine permanent sur dashboard.ngrok.com^)
         start /B .\ngrok.exe http 3000 --log=stdout > "%TEMP%\millora_ngrok.log" 2>&1
@@ -108,3 +108,4 @@ echo  Ctrl+C pour arreter.
 echo.
 node server.js
 pause
+

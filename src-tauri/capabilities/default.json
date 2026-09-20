@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default permissions for Millora desktop application",
+  "windows": ["main", "*"],
+  "permissions": [
+    "core:default",
+    "shell:default",
+    "shell:allow-open",
+    "fs:default",
+    "dialog:default",
+    "process:default"
+  ]
+}

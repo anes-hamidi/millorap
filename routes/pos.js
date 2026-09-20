@@ -190,7 +190,7 @@ router.get('/history', async (req, res) => {
 });
 
 // API: Get Server Host Info for Mobile Scanning
-router.get('/info', (req, res) => {
+router.get(['/info', '/lan-ip'], (req, res) => {
   const ip = getLocalIp();
   const port = process.env.PORT || 3000;
   // If PUBLIC_URL is set (e.g. Cloudflare Tunnel), use it for QR codes

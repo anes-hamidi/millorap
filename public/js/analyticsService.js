@@ -53,9 +53,9 @@
 
     if (saleIds.size === 0) return [];
 
-    // Fetch sale items corresponding to these sales
-    const allSaleItems = await db.saleItems.toArray();
-    const filteredItems = allSaleItems.filter(item => saleIds.has(item.saleId));
+    // Fetch sale items using indexed anyOf query
+    const saleIdsArr = Array.from(saleIds);
+    const filteredItems = await db.saleItems.where('saleId').anyOf(saleIdsArr).toArray();
 
     // Aggregate by productId
     const productAgg = new Map();
@@ -92,14 +92,15 @@
     }
     const db = window.FlexiDB.db;
 
-    let sales = await db.sales.toArray();
-    if (startDate) {
-      const startIso = new Date(startDate).toISOString();
-      sales = sales.filter(s => s.timestamp >= startIso);
-    }
-    if (endDate) {
-      const endIso = new Date(endDate).toISOString();
-      sales = sales.filter(s => s.timestamp <= endIso);
+    let sales;
+    if (startDate && endDate) {
+      sales = await db.sales.where('timestamp').between(new Date(startDate).toISOString(), new Date(endDate).toISOString(), true, true).toArray();
+    } else if (startDate) {
+      sales = await db.sales.where('timestamp').aboveOrEqual(new Date(startDate).toISOString()).toArray();
+    } else if (endDate) {
+      sales = await db.sales.where('timestamp').belowOrEqual(new Date(endDate).toISOString()).toArray();
+    } else {
+      sales = await db.sales.toArray();
     }
 
     const orderCount = sales.length;
