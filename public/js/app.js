@@ -1245,6 +1245,29 @@ async function openCustomerDetailModal(customerId) {
         openCreateCustomerModal(customer);
       };
     }
+    const printStmtBtn = document.getElementById('debt-modal-print-stmt-btn');
+    if (printStmtBtn) {
+      printStmtBtn.onclick = () => {
+        printCustomerStatement(customer.id);
+      };
+    }
+    const deleteCustBtn = document.getElementById('debt-modal-delete-cust-btn');
+    if (deleteCustBtn) {
+      deleteCustBtn.onclick = async () => {
+        if (!confirm(`Confirmez-vous la suppression définitive du client "${customer.name}" ?`)) return;
+        try {
+          await window.DebtService.deleteCustomer(customer.id);
+          showToast(`Client "${customer.name}" supprimé.`);
+          document.getElementById('debt-customer-modal')?.classList.add('hidden');
+          await renderDebtsWorkspace();
+          if (window.DebtService?.refreshDebtBadge) {
+            await window.DebtService.refreshDebtBadge();
+          }
+        } catch (e) {
+          showToast(e.message, 'error');
+        }
+      };
+    }
 
     const container = document.getElementById('debt-modal-debts-list');
     if (container) {
@@ -1298,7 +1321,11 @@ async function openCustomerDetailModal(customerId) {
                     <button onclick="handleWriteOffDebt(${de.id}, ${customer.id})" class="px-2 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-rose-100 dark:hover:bg-rose-950 text-slate-600 dark:text-slate-300 hover:text-rose-600 text-xs transition" title="Passer en perte irrécouvrable">
                       Passer en perte
                     </button>
-                  ` : ''}
+                  ` : (isWrittenOff ? `
+                    <button onclick="handleReverseWriteOff(${de.id}, ${customer.id})" class="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold transition">
+                      Restaurer la dette
+                    </button>
+                  ` : '')}
                 </div>
               </div>
 
@@ -1317,24 +1344,23 @@ async function openCustomerDetailModal(customerId) {
 }
 window.openCustomerDetailModal = openCustomerDetailModal;
 
-// Quick payment: finds oldest open debt for customer
+// Quick payment / Lump-Sum payment for customer
+let currentPaymentCustomerId = null;
+let currentPaymentDebtId = null;
+
 async function openCustomerQuickPaymentModal(customerId) {
   if (!window.DebtService) return;
   const data = await window.DebtService.getCustomerById(customerId);
   if (!data || !data.debts) return;
-  const openDebt = data.debts.find(d => d.status === 'open');
-  if (!openDebt) {
+  const openDebts = data.debts.filter(d => d.status === 'open');
+  if (openDebts.length === 0) {
     showToast('Aucune dette en cours pour ce client !');
     return;
   }
-  openRecordPaymentModal(openDebt.id, openDebt.remainingAmount, data.customer.name);
-}
-window.openCustomerQuickPaymentModal = openCustomerQuickPaymentModal;
+  const totalRemaining = openDebts.reduce((s, d) => s + (d.remainingAmount || 0), 0);
+  currentPaymentCustomerId = customerId;
+  currentPaymentDebtId = null; // null indicates Lump-sum FIFO
 
-// Record Payment Modal
-let currentPaymentDebtId = null;
-function openRecordPaymentModal(debtId, maxAmount, customerName) {
-  currentPaymentDebtId = debtId;
   const modal = document.getElementById('debt-payment-modal');
   if (!modal) return;
 
@@ -1343,7 +1369,32 @@ function openRecordPaymentModal(debtId, maxAmount, customerName) {
   const amountInput = document.getElementById('debt-pay-amount-input');
   const noteInput = document.getElementById('debt-pay-note-input');
 
-  if (nameEl) nameEl.innerText = customerName || '';
+  if (nameEl) nameEl.innerText = `${data.customer.name} (Versement Global)`;
+  if (maxDisp) maxDisp.innerText = `${Number(totalRemaining).toFixed(2)} DA`;
+  if (amountInput) {
+    amountInput.value = Number(totalRemaining).toFixed(2);
+    amountInput.max = totalRemaining;
+  }
+  if (noteInput) noteInput.value = '';
+
+  modal.classList.remove('hidden');
+  amountInput?.focus();
+}
+window.openCustomerQuickPaymentModal = openCustomerQuickPaymentModal;
+
+// Record Payment Modal for a single debt ticket
+function openRecordPaymentModal(debtId, maxAmount, customerName) {
+  currentPaymentDebtId = debtId;
+  currentPaymentCustomerId = null;
+  const modal = document.getElementById('debt-payment-modal');
+  if (!modal) return;
+
+  const nameEl = document.getElementById('debt-pay-customer-name');
+  const maxDisp = document.getElementById('debt-pay-max-display');
+  const amountInput = document.getElementById('debt-pay-amount-input');
+  const noteInput = document.getElementById('debt-pay-note-input');
+
+  if (nameEl) nameEl.innerText = customerName ? `${customerName} (Ticket spécifique)` : '';
   if (maxDisp) maxDisp.innerText = `${Number(maxAmount).toFixed(2)} DA`;
   if (amountInput) {
     amountInput.value = Number(maxAmount).toFixed(2);
@@ -1357,7 +1408,7 @@ function openRecordPaymentModal(debtId, maxAmount, customerName) {
 window.openRecordPaymentModal = openRecordPaymentModal;
 
 async function confirmPaymentRecord() {
-  if (!currentPaymentDebtId || !window.DebtService) return;
+  if (!window.DebtService) return;
   const amountInput = document.getElementById('debt-pay-amount-input');
   const noteInput = document.getElementById('debt-pay-note-input');
   const amount = parseFloat(amountInput?.value) || 0;
@@ -1369,25 +1420,43 @@ async function confirmPaymentRecord() {
   }
 
   try {
-    const updated = await window.DebtService.recordPayment({
-      debtId: currentPaymentDebtId,
-      amount: amount,
-      note: note
-    });
-
-    document.getElementById('debt-payment-modal')?.classList.add('hidden');
-    
-    if (updated.awakened) {
-      showToast(`🎉 Client ${updated.customerName || ''} réactivé ! Le solde est repassé sous le plafond.`);
-    } else {
-      showToast(`Versement de ${amount.toFixed(2)} DA enregistré avec succès !`);
+    let updated;
+    if (currentPaymentCustomerId) {
+      // FIFO Lump sum payment
+      updated = await window.DebtService.recordCustomerLumpSumPayment(currentPaymentCustomerId, amount, note);
+      document.getElementById('debt-payment-modal')?.classList.add('hidden');
+      if (updated.awakened) {
+        showToast(`🎉 Client ${updated.customerName || ''} réactivé ! Le solde est repassé sous le plafond.`);
+      } else {
+        showToast(`Versement global de ${amount.toFixed(2)} DA validé (${updated.paymentsCount} créance(s) imputée(s)) !`);
+      }
+      const custModal = document.getElementById('debt-customer-modal');
+      if (custModal && !custModal.classList.contains('hidden')) {
+        await openCustomerDetailModal(currentPaymentCustomerId);
+      }
+    } else if (currentPaymentDebtId) {
+      // Specific debt ticket payment
+      updated = await window.DebtService.recordPayment({
+        debtId: currentPaymentDebtId,
+        amount: amount,
+        note: note
+      });
+      document.getElementById('debt-payment-modal')?.classList.add('hidden');
+      if (updated.awakened) {
+        showToast(`🎉 Client ${updated.customerName || ''} réactivé ! Le solde est repassé sous le plafond.`);
+      } else {
+        showToast(`Versement de ${amount.toFixed(2)} DA enregistré avec succès !`);
+      }
+      const custModal = document.getElementById('debt-customer-modal');
+      if (custModal && !custModal.classList.contains('hidden') && updated.customerId) {
+        await openCustomerDetailModal(updated.customerId);
+      }
     }
 
-    const custModal = document.getElementById('debt-customer-modal');
-    if (custModal && !custModal.classList.contains('hidden') && updated.customerId) {
-      await openCustomerDetailModal(updated.customerId);
-    }
     await renderDebtsWorkspace();
+    if (window.DebtService?.refreshDebtBadge) {
+      await window.DebtService.refreshDebtBadge();
+    }
   } catch (e) {
     showToast(e.message, 'error');
   }
@@ -1395,17 +1464,119 @@ async function confirmPaymentRecord() {
 window.confirmPaymentRecord = confirmPaymentRecord;
 
 async function handleWriteOffDebt(debtId, customerId) {
-  if (!confirm('Confirmez-vous le passage en perte de cette dette ? Cette action est irréversible.')) return;
+  if (!confirm('Confirmez-vous le passage en perte de cette dette ?')) return;
   try {
     await window.DebtService.writeOffDebt(debtId);
     showToast('Dette passée en pertes.');
     if (customerId) await openCustomerDetailModal(customerId);
     await renderDebtsWorkspace();
+    if (window.DebtService?.refreshDebtBadge) {
+      await window.DebtService.refreshDebtBadge();
+    }
   } catch (e) {
     showToast(e.message, 'error');
   }
 }
 window.handleWriteOffDebt = handleWriteOffDebt;
+
+async function handleReverseWriteOff(debtId, customerId) {
+  if (!confirm('Voulez-vous restaurer cette dette passée en perte ?')) return;
+  try {
+    await window.DebtService.reverseWriteOff(debtId);
+    showToast('Dette restaurée avec succès !');
+    if (customerId) await openCustomerDetailModal(customerId);
+    await renderDebtsWorkspace();
+    if (window.DebtService?.refreshDebtBadge) {
+      await window.DebtService.refreshDebtBadge();
+    }
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+window.handleReverseWriteOff = handleReverseWriteOff;
+
+async function printCustomerStatement(customerId) {
+  if (!window.DebtService) return;
+  try {
+    const data = await window.DebtService.getCustomerById(customerId);
+    if (!data) return;
+    const { customer, debts } = data;
+    const openDebts = debts.filter(d => d.status === 'open');
+    const totalRemaining = openDebts.reduce((s, d) => s + (d.remainingAmount || 0), 0);
+    const totalOwed = debts.reduce((s, d) => s + (d.amount || 0), 0);
+    const totalPaid = totalOwed - totalRemaining;
+
+    const printHtml = `
+      <div style="font-family: 'Courier New', Courier, monospace; width: 72mm; margin: 0 auto; padding: 6px; font-size: 11px; line-height: 1.3; color: #000; background: #fff;">
+        <div style="text-align: center; border-bottom: 2px dashed #000; padding-bottom: 6px; margin-bottom: 8px;">
+          <h2 style="margin: 0; font-size: 15px; font-weight: bold;">MILLORA PRINT & POS</h2>
+          <p style="margin: 2px 0; font-size: 10px; font-weight: bold;">RELEVÉ DE COMPTE CLIENT</p>
+          <p style="margin: 2px 0; font-size: 9px;">Date : ${new Date().toLocaleString()}</p>
+        </div>
+
+        <div style="margin-bottom: 8px; border-bottom: 1px dashed #000; padding-bottom: 6px; font-size: 10px;">
+          <p style="margin: 2px 0;"><strong>Client :</strong> ${escapeHtml(customer.name)}</p>
+          <p style="margin: 2px 0;"><strong>Téléphone :</strong> ${escapeHtml(customer.phone || 'Non renseigné')}</p>
+          <p style="margin: 2px 0;"><strong>Plafond autorisé :</strong> ${customer.debtLimit > 0 ? customer.debtLimit.toFixed(2) + ' DA' : 'Illimité'}</p>
+        </div>
+
+        <div style="margin-bottom: 8px;">
+          <p style="margin: 2px 0; font-weight: bold; font-size: 10px;">CRÉANCES EN COURS (${openDebts.length}) :</p>
+          <table style="width: 100%; border-collapse: collapse; font-size: 9px; margin-top: 4px;">
+            <thead>
+              <tr style="border-bottom: 1px solid #000;">
+                <th style="text-align: left; padding: 2px 0;">Réf/Date</th>
+                <th style="text-align: right; padding: 2px 0;">Total</th>
+                <th style="text-align: right; padding: 2px 0;">Reste</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${openDebts.map(d => `
+                <tr>
+                  <td style="padding: 2px 0;">
+                    ${escapeHtml(d.orderRef || 'Créance')}<br>
+                    <span style="font-size: 8px; color: #555;">${new Date(d.createdAt).toLocaleDateString()}</span>
+                  </td>
+                  <td style="text-align: right; padding: 2px 0;">${Number(d.amount).toFixed(2)}</td>
+                  <td style="text-align: right; padding: 2px 0; font-weight: bold;">${Number(d.remainingAmount).toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <div style="border-top: 2px dashed #000; padding-top: 6px; margin-top: 8px; font-size: 11px;">
+          <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+            <span>Total Emprunté:</span>
+            <strong>${totalOwed.toFixed(2)} DA</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+            <span>Total Remboursé:</span>
+            <strong>${totalPaid.toFixed(2)} DA</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin: 4px 0 0 0; font-size: 13px; font-weight: bold; border-top: 1px solid #000; padding-top: 4px;">
+            <span>SOLDE RESTANT DÛ:</span>
+            <span>${totalRemaining.toFixed(2)} DA</span>
+          </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 12px; border-top: 1px dashed #000; padding-top: 6px; font-size: 9px;">
+          <p style="margin: 2px 0; font-weight: bold;">MERCI POUR VOTRE CONFIANCE !</p>
+          <p style="margin: 2px 0;">Millora POS 100% Hors-Ligne</p>
+        </div>
+      </div>
+    `;
+
+    const printArea = document.getElementById('print-area');
+    if (printArea) {
+      printArea.innerHTML = printHtml;
+      setTimeout(() => { window.print(); }, 250);
+    }
+  } catch (err) {
+    showToast('Erreur impression relevé: ' + err.message, 'error');
+  }
+}
+window.printCustomerStatement = printCustomerStatement;
 
 // ── STANDALONE CUSTOMER CREATION & EDIT MODAL ─────────────────────────────
 function openCreateCustomerModal(customerToEdit = null) {

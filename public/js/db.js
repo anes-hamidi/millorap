@@ -54,7 +54,6 @@
     { name: 'Sara Mansouri', phone: '0661223344', debtLimit: 8000, status: 'active', notes: 'Bureau voisin', createdAt: new Date(Date.now() - 86400000 * 2).toISOString() }
   ];
 
-  let dbInitPromise = null;
   async function initDatabase() {
     try {
       if (!db.isOpen()) {
@@ -117,16 +116,161 @@
     }
   }
 
+  // --- Complete Category CRUD operations ---
+  async function getAllCategories() {
+    if (!db.isOpen()) await db.open();
+    let storedCategories = [];
+    try {
+      storedCategories = await db.categories.toArray();
+    } catch (e) {
+      console.warn('Error fetching categories from Dexie:', e);
+    }
+
+    // Also check if any products have custom categories not yet in db.categories
+    let productCategories = [];
+    try {
+      const products = await db.products.toArray();
+      productCategories = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
+    } catch (e) {}
+
+    // Combine them ensuring every object has { id, name, icon }
+    const catMap = new Map();
+    for (const cat of storedCategories) {
+      if (cat && cat.name) {
+        catMap.set(cat.name, {
+          id: cat.id,
+          name: cat.name,
+          icon: cat.icon || '🏷️',
+          createdAt: cat.createdAt || new Date().toISOString()
+        });
+      }
+    }
+
+    for (const pCat of productCategories) {
+      if (!catMap.has(pCat)) {
+        try {
+          const newId = await db.categories.add({
+            name: pCat,
+            icon: '🏷️',
+            createdAt: new Date().toISOString()
+          });
+          catMap.set(pCat, { id: newId, name: pCat, icon: '🏷️' });
+        } catch (e) {
+          catMap.set(pCat, { id: null, name: pCat, icon: '🏷️' });
+        }
+      }
+    }
+
+    return Array.from(catMap.values());
+  }
+
+  async function addCategory(name, icon = '🏷️') {
+    if (!db.isOpen()) await db.open();
+    const cleanName = (name || '').trim();
+    if (!cleanName) throw new Error('Le nom de la catégorie est obligatoire.');
+
+    const existing = await db.categories.where('name').equalsIgnoreCase(cleanName).first();
+    if (existing) {
+      throw new Error(`La catégorie "${cleanName}" existe déjà.`);
+    }
+
+    const id = await db.categories.add({
+      name: cleanName,
+      icon: (icon || '').trim() || '🏷️',
+      createdAt: new Date().toISOString()
+    });
+
+    return { id, name: cleanName, icon: icon || '🏷️' };
+  }
+
+  async function updateCategory(id, newName, newIcon) {
+    if (!db.isOpen()) await db.open();
+    const cleanName = (newName || '').trim();
+    if (!cleanName) throw new Error('Le nom de la catégorie est obligatoire.');
+
+    let category = null;
+    if (id) {
+      category = await db.categories.get(Number(id) || id);
+    }
+    if (!category) {
+      category = await db.categories.where('name').equalsIgnoreCase(cleanName).first();
+    }
+    if (!category) {
+      throw new Error('Catégorie introuvable.');
+    }
+
+    const oldName = category.name;
+    const cleanIcon = (newIcon || '').trim() || category.icon || '🏷️';
+
+    // Check for name duplicate with other categories
+    if (cleanName.toLowerCase() !== oldName.toLowerCase()) {
+      const duplicate = await db.categories.where('name').equalsIgnoreCase(cleanName).first();
+      if (duplicate && duplicate.id !== category.id) {
+        throw new Error(`Une catégorie nommée "${cleanName}" existe déjà.`);
+      }
+    }
+
+    await db.categories.update(category.id, {
+      name: cleanName,
+      icon: cleanIcon,
+      updatedAt: new Date().toISOString()
+    });
+
+    // Cascade rename to associated products if the name changed
+    if (cleanName !== oldName) {
+      const matchingProducts = await db.products.where('category').equals(oldName).toArray();
+      for (const p of matchingProducts) {
+        await db.products.update(p.id, { category: cleanName });
+      }
+    }
+
+    return { id: category.id, name: cleanName, icon: cleanIcon };
+  }
+
+  async function deleteCategory(id, fallbackCategory = 'General') {
+    if (!db.isOpen()) await db.open();
+    let category = null;
+    if (id) {
+      category = await db.categories.get(Number(id) || id);
+    }
+    if (!category) {
+      throw new Error('Catégorie introuvable.');
+    }
+
+    const oldName = category.name;
+
+    // Delete category
+    await db.categories.delete(category.id);
+
+    // Reclassify products referencing this category to fallbackCategory
+    const matchingProducts = await db.products.where('category').equals(oldName).toArray();
+    for (const p of matchingProducts) {
+      await db.products.update(p.id, { category: fallbackCategory });
+    }
+
+    // Ensure fallbackCategory exists in categories store
+    const fallbackExists = await db.categories.where('name').equalsIgnoreCase(fallbackCategory).first();
+    if (!fallbackExists && matchingProducts.length > 0) {
+      try {
+        await db.categories.add({
+          name: fallbackCategory,
+          icon: '📦',
+          createdAt: new Date().toISOString()
+        });
+      } catch (e) {}
+    }
+
+    return true;
+  }
+
   // Exposed FlexiDB global interface
   window.FlexiDB = {
     db: db,
     init: initDatabase,
-    getAllCategories: async function() {
-      if (!db.isOpen()) await db.open();
-      const products = await db.products.toArray();
-      const categories = new Set(products.map(p => p.category).filter(Boolean));
-      return Array.from(categories);
-    },
+    getAllCategories: getAllCategories,
+    addCategory: addCategory,
+    updateCategory: updateCategory,
+    deleteCategory: deleteCategory,
     DEFAULT_SEED_PRODUCTS: DEFAULT_SEED_PRODUCTS,
     DEFAULT_SEED_CATEGORIES: DEFAULT_SEED_CATEGORIES,
     DEFAULT_SEED_CUSTOMERS: DEFAULT_SEED_CUSTOMERS

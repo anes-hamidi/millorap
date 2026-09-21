@@ -303,7 +303,81 @@
     };
   }
 
-  // ── WRITE-OFF ───────────────────────────────────────────────────────────────
+  /**
+   * Lump-sum FIFO payment: applies an overall payment amount across all open customer debts.
+   */
+  async function recordCustomerLumpSumPayment(customerId, amount, note = '') {
+    const d = db();
+    if (!d) throw new Error('Database not ready');
+    const custId = Number(customerId);
+    const customer = await d.customers.get(custId);
+    if (!customer) throw new Error('Client introuvable');
+
+    let totalToDistribute = Math.max(0, Number(amount) || 0);
+    if (totalToDistribute <= 0) throw new Error('Le montant doit être supérieur à zéro');
+
+    const openDebts = await d.debts.where('customerId').equals(custId).filter(de => de.status === 'open').toArray();
+    // Sort oldest first (FIFO)
+    openDebts.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+
+    const totalOpenBalance = openDebts.reduce((s, de) => s + (Number(de.remainingAmount) || 0), 0);
+    if (totalToDistribute > totalOpenBalance + 0.001) {
+      throw new Error(`Le montant (${totalToDistribute.toFixed(2)} DA) dépasse le solde total dû (${totalOpenBalance.toFixed(2)} DA).`);
+    }
+
+    let awakened = false;
+    const paymentRecords = [];
+    const now = new Date().toISOString();
+
+    await d.transaction('rw', d.debts, d.debtPayments, d.customers, async () => {
+      let remainingPayment = totalToDistribute;
+
+      for (const debt of openDebts) {
+        if (remainingPayment <= 0.001) break;
+        const curDebtRemaining = Number(debt.remainingAmount) || 0;
+        const allocated = Math.min(remainingPayment, curDebtRemaining);
+        const newRemaining = Math.max(0, curDebtRemaining - allocated);
+        const newStatus = newRemaining <= 0 ? 'paid' : 'open';
+
+        await d.debtPayments.add({
+          debtId: debt.id,
+          amount: allocated,
+          paidAt: now,
+          note: note ? `${note} (Versement global)` : 'Versement global FIFO'
+        });
+
+        await d.debts.update(debt.id, {
+          remainingAmount: newRemaining,
+          status: newStatus
+        });
+
+        paymentRecords.push({ debtId: debt.id, allocated, orderRef: debt.orderRef });
+        remainingPayment -= allocated;
+      }
+
+      // Check customer awakening
+      const allOpen = await d.debts.where('customerId').equals(custId).filter(de => de.status === 'open').toArray();
+      const customerNewRemaining = allOpen.reduce((s, de) => s + (Number(de.remainingAmount) || 0), 0);
+      const customerDebtLimit = Math.max(0, Number(customer.debtLimit) || 0);
+
+      if (customerDebtLimit > 0 && customerNewRemaining < customerDebtLimit) {
+        if (customer.status === 'sleeping') {
+          await d.customers.update(custId, { status: 'active' });
+          awakened = true;
+        }
+      }
+    });
+
+    return {
+      customerId: custId,
+      customerName: customer.name,
+      totalPaid: totalToDistribute,
+      awakened,
+      paymentsCount: paymentRecords.length
+    };
+  }
+
+  // ── WRITE-OFF & REVERSAL ───────────────────────────────────────────────────
 
   async function writeOffDebt(debtId) {
     const d = db();
@@ -312,6 +386,44 @@
     if (!debt) throw new Error('Dette introuvable');
     await d.debts.update(debtId, { status: 'written_off', remainingAmount: 0 });
     return await d.debts.get(debtId);
+  }
+
+  async function reverseWriteOff(debtId) {
+    const d = db();
+    if (!d) throw new Error('Database not ready');
+    const debt = await d.debts.get(debtId);
+    if (!debt) throw new Error('Dette introuvable');
+    if (debt.status !== 'written_off') throw new Error('Cette dette n\'est pas passée en perte');
+
+    // Recompute remaining from total amount minus payments
+    const payments = await d.debtPayments.where('debtId').equals(debtId).toArray();
+    const totalPaid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const restoredRemaining = Math.max(0, (Number(debt.amount) || 0) - totalPaid);
+    const newStatus = restoredRemaining <= 0 ? 'paid' : 'open';
+
+    await d.debts.update(debtId, { status: newStatus, remainingAmount: restoredRemaining });
+    return await d.debts.get(debtId);
+  }
+
+  async function deleteCustomer(customerId) {
+    const d = db();
+    if (!d) throw new Error('Database not ready');
+    const custId = Number(customerId);
+    const debts = await d.debts.where('customerId').equals(custId).toArray();
+    const openDebts = debts.filter(d => d.status === 'open');
+    if (openDebts.length > 0) {
+      throw new Error(`Impossible de supprimer : ce client a ${openDebts.length} créance(s) non soldée(s).`);
+    }
+
+    const debtIds = debts.map(d => d.id);
+    await d.transaction('rw', d.customers, d.debts, d.debtPayments, async () => {
+      if (debtIds.length > 0) {
+        await d.debtPayments.where('debtId').anyOf(debtIds).delete();
+        await d.debts.where('customerId').equals(custId).delete();
+      }
+      await d.customers.delete(custId);
+    });
+    return true;
   }
 
   // ── KPI / BADGE ─────────────────────────────────────────────────────────────
@@ -418,11 +530,14 @@
     findOrCreateCustomer,
     createCustomer,
     updateCustomer,
+    deleteCustomer,
     getAllCustomers,
     getCustomerById,
     recordDebt,
     recordPayment,
+    recordCustomerLumpSumPayment,
     writeOffDebt,
+    reverseWriteOff,
     getTotalOutstanding,
     refreshDebtBadge,
     exportDebtsToCsv,

@@ -88,7 +88,7 @@
    */
   async function getRevenueAnalytics(startDate = null, endDate = null) {
     if (!window.FlexiDB || !window.FlexiDB.db) {
-      return { totalRevenue: 0, totalCost: 0, netProfit: 0, marginPercent: 0, orderCount: 0, avgBasket: 0, paymentMethods: {} };
+      return { totalRevenue: 0, totalCost: 0, netProfit: 0, marginPercent: 0, orderCount: 0, avgBasket: 0, actualCashCollected: 0, uncollectedCredit: 0, paymentMethods: {} };
     }
     const db = window.FlexiDB.db;
 
@@ -103,15 +103,46 @@
       sales = await db.sales.toArray();
     }
 
-    const orderCount = sales.length;
-    const totalRevenue = sales.reduce((sum, s) => sum + (Number(s.totalAmount) || 0), 0);
-    const totalCost = sales.reduce((sum, s) => sum + (Number(s.totalCost) || 0), 0);
+    // Filter out refunded sales
+    const validSales = sales.filter(s => s.status !== 'refunded');
+
+    const orderCount = validSales.length;
+    const totalRevenue = validSales.reduce((sum, s) => sum + (Number(s.totalAmount) || 0), 0);
+    const totalCost = validSales.reduce((sum, s) => sum + (Number(s.totalCost) || 0), 0);
     const netProfit = totalRevenue - totalCost;
     const marginPercent = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100) : 0;
     const avgBasket = orderCount > 0 ? (totalRevenue / orderCount) : 0;
 
+    // Fetch debt repayments and uncollected debt in this timeframe
+    let debtPayments = [];
+    let openDebts = [];
+    try {
+      if (db.debtPayments) {
+        if (startDate && endDate) {
+          debtPayments = await db.debtPayments.where('paidAt').between(new Date(startDate).toISOString(), new Date(endDate).toISOString(), true, true).toArray();
+        } else if (startDate) {
+          debtPayments = await db.debtPayments.where('paidAt').aboveOrEqual(new Date(startDate).toISOString()).toArray();
+        } else if (endDate) {
+          debtPayments = await db.debtPayments.where('paidAt').belowOrEqual(new Date(endDate).toISOString()).toArray();
+        } else {
+          debtPayments = await db.debtPayments.toArray();
+        }
+      }
+      if (db.debts) {
+        openDebts = await db.debts.where('status').equals('open').toArray();
+      }
+    } catch (e) {}
+
+    const directCashSales = validSales
+      .filter(s => (s.paymentMethod || 'cash').toLowerCase() !== 'credit')
+      .reduce((sum, s) => sum + (Number(s.totalAmount) || 0), 0);
+
+    const debtCollections = debtPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const actualCashCollected = directCashSales + debtCollections;
+    const uncollectedCredit = openDebts.reduce((sum, d) => sum + (Number(d.remainingAmount) || 0), 0);
+
     // Payment method breakdown
-    const paymentMethods = sales.reduce((acc, s) => {
+    const paymentMethods = validSales.reduce((acc, s) => {
       const method = (s.paymentMethod || 'cash').toLowerCase();
       if (!acc[method]) acc[method] = { count: 0, total: 0 };
       acc[method].count += 1;
@@ -126,6 +157,9 @@
       netProfit,
       marginPercent,
       avgBasket,
+      actualCashCollected,
+      debtCollections,
+      uncollectedCredit,
       paymentMethods
     };
   }

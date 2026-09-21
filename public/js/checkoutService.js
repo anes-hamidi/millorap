@@ -175,8 +175,91 @@
       };
     });
   }
+  /**
+   * Process an order return / refund transaction.
+   * Restores product stock, creates RESTOCK logs, and marks sale as refunded.
+   */
+  async function processRefund(orderRef, reason = 'Client return') {
+    if (window.FlexiDB && window.FlexiDB.init) {
+      await window.FlexiDB.init();
+    }
+    if (!window.FlexiDB || !window.FlexiDB.db) {
+      throw new Error('Database is not initialized.');
+    }
+    const db = window.FlexiDB.db;
+    const timestamp = new Date().toISOString();
+
+    return await db.transaction('rw', db.products, db.sales, db.saleItems, db.stockLogs, db.debts, async () => {
+      const sale = await db.sales.where('orderRef').equals(orderRef).first();
+      if (!sale) throw new Error('Commande introuvable.');
+      if (sale.status === 'refunded') throw new Error('Cette commande a déjà été remboursée.');
+
+      let lineItems = await db.saleItems.where('saleId').equals(sale.id).toArray();
+      if ((!lineItems || lineItems.length === 0) && sale.items && sale.items.length > 0) {
+        lineItems = sale.items.map(i => ({
+          productId: i.id,
+          productName: i.name,
+          quantity: i.qty || 1
+        }));
+      }
+
+      // Restock products & add RESTOCK logs
+      for (const line of lineItems) {
+        if (!line.productId) continue;
+        const product = await db.products.get(line.productId);
+        if (product) {
+          const prevStock = Number(product.currentStock) || 0;
+          const returnQty = Number(line.quantity) || 1;
+          const newStock = prevStock + returnQty;
+
+          await db.products.update(product.id, {
+            currentStock: newStock,
+            updatedAt: timestamp
+          });
+
+          await db.stockLogs.add({
+            productId: product.id,
+            timestamp,
+            type: 'RESTOCK',
+            quantityChange: returnQty,
+            previousStock: prevStock,
+            newStock: newStock,
+            referenceId: `REFUND_${orderRef}`,
+            note: `Retour commande #${orderRef} (${reason})`
+          });
+        }
+      }
+
+      // If this was a credit sale, close or mark debt as refunded
+      if (db.debts) {
+        const debt = await db.debts.where('saleId').equals(sale.id).first();
+        if (debt) {
+          await db.debts.update(debt.id, {
+            status: 'refunded',
+            remainingAmount: 0,
+            note: (debt.note || '') + ' [VENTE REMBOURSÉE/ANNULÉE]'
+          });
+        }
+      }
+
+      // Update sale record
+      await db.sales.update(sale.id, {
+        status: 'refunded',
+        refundedAt: timestamp,
+        refundReason: reason
+      });
+
+      return {
+        success: true,
+        orderRef,
+        refundedAmount: sale.totalAmount,
+        itemsCount: lineItems.length
+      };
+    });
+  }
 
   window.CheckoutService = {
-    processCheckout
+    processCheckout,
+    processRefund
   };
 })();

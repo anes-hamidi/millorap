@@ -70,6 +70,7 @@
     try {
       setupPosEventListeners();
       initHardwareScannerListener();
+      updateParkedCartsUI();
       checkBackupReminder();
     } catch (e) {
       console.error('Error setting up POS listeners:', e);
@@ -630,6 +631,70 @@
     }
   });
 
+  // --- Cart Hold / Park & Resume ---
+  let posParkedCarts = JSON.parse(localStorage.getItem('pos_parked_carts') || '[]');
+
+  function updateParkedCartsUI() {
+    const bar = document.getElementById('pos-parked-carts-bar');
+    const countEl = document.getElementById('pos-parked-carts-count');
+    if (bar && countEl) {
+      if (posParkedCarts.length > 0) {
+        bar.classList.remove('hidden');
+        countEl.innerText = posParkedCarts.length;
+      } else {
+        bar.classList.add('hidden');
+      }
+    }
+  }
+
+  window.parkCurrentPosCart = () => {
+    if (posCart.length === 0) {
+      showToast('Le panier actuel est vide !', 'error');
+      return;
+    }
+    posParkedCarts.push({
+      cart: [...posCart],
+      discountPercent: posDiscountPercent,
+      timestamp: new Date().toISOString()
+    });
+    localStorage.setItem('pos_parked_carts', JSON.stringify(posParkedCarts));
+
+    posCart = [];
+    posDiscountPercent = 0;
+    const discInput = document.getElementById('pos-discount-input');
+    if (discInput) discInput.value = 0;
+
+    renderPosCart();
+    updateParkedCartsUI();
+    showToast('Panier mis en attente ⏸️. Vous pouvez servir le client suivant.');
+  };
+
+  window.resumeLastParkedCart = () => {
+    if (posParkedCarts.length === 0) return;
+    if (posCart.length > 0) {
+      if (!confirm('Le panier actuel contient des articles. Voulez-vous mettre le panier actuel en attente et reprendre le précédent ?')) {
+        return;
+      }
+      posParkedCarts.push({
+        cart: [...posCart],
+        discountPercent: posDiscountPercent,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    const last = posParkedCarts.pop();
+    localStorage.setItem('pos_parked_carts', JSON.stringify(posParkedCarts));
+
+    posCart = last.cart || [];
+    posDiscountPercent = last.discountPercent || 0;
+    const discInput = document.getElementById('pos-discount-input');
+    if (discInput) discInput.value = posDiscountPercent;
+
+    renderPosCart();
+    updateParkedCartsUI();
+    showToast('Panier repris avec succès ↩');
+  };
+
   // --- Cart Operations ---
   window.addToPosCart = (productId) => {
     const product = productMap.get(productId) || productMap.get(Number(productId)) || productMap.get(String(productId)) || posProducts.find(p => String(p.id) === String(productId));
@@ -1157,20 +1222,23 @@
 
       list.innerHTML = categories.map((cat, idx) => {
         const count = counts[idx] || 0;
+        const catId = cat.id != null ? cat.id : '';
+        const catName = cat.name || '';
+        const catIcon = cat.icon || '🏷️';
         return `
-          <div class="p-3 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between gap-3 text-xs">
+          <div class="p-3 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between gap-3 text-xs" data-cat-id="${escapeHtml(String(catId))}">
             <div class="flex items-center gap-2.5 min-w-0">
-              <span class="text-xl shrink-0">${escapeHtml(cat.icon || '🏷️')}</span>
+              <span class="text-xl shrink-0">${escapeHtml(catIcon)}</span>
               <div class="flex flex-col min-w-0">
-                <span class="font-bold text-slate-800 dark:text-slate-100 truncate text-sm">${escapeHtml(cat.name)}</span>
+                <span class="font-bold text-slate-800 dark:text-slate-100 truncate text-sm">${escapeHtml(catName)}</span>
                 <span class="text-[10px] text-slate-400 font-mono">${count} article(s) associé(s)</span>
               </div>
             </div>
             <div class="flex items-center gap-1.5 shrink-0">
-              <button onclick="handleEditCategory(${cat.id}, '${escapeHtml(cat.name)}', '${escapeHtml(cat.icon || '🏷️')}')" class="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition" title="Renommer">
+              <button onclick="handleEditCategory('${escapeHtml(String(catId))}', '${escapeHtml(catName.replace(/'/g, "\\'"))}', '${escapeHtml(catIcon.replace(/'/g, "\\'"))}')" class="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition" title="Renommer">
                 ✏️
               </button>
-              <button onclick="handleDeleteCategory(${cat.id}, '${escapeHtml(cat.name)}', ${count})" class="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition" title="Supprimer">
+              <button onclick="handleDeleteCategory('${escapeHtml(String(catId))}', '${escapeHtml(catName.replace(/'/g, "\\'"))}', ${count})" class="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition" title="Supprimer">
                 🗑️
               </button>
             </div>
@@ -1200,6 +1268,9 @@
       await renderCategoryManagerList();
       await syncCategoriesUI();
       await loadPosProducts();
+      if (typeof window.renderInventoryWorkspace === 'function') {
+        window.renderInventoryWorkspace();
+      }
     } catch (e) {
       showToast(e.message, 'error');
     }
@@ -1207,8 +1278,8 @@
 
   window.handleEditCategory = async (id, oldName, currentIcon) => {
     const newName = prompt(`Modifier le nom de la catégorie "${oldName}" :`, oldName);
-    if (!newName || newName.trim() === '' || newName.trim() === oldName) return;
-    const newIcon = prompt(`Emoji / Icône pour "${newName.trim()}" :`, currentIcon) || currentIcon;
+    if (!newName || newName.trim() === '') return;
+    const newIcon = prompt(`Emoji / Icône pour "${newName.trim()}" :`, currentIcon || '🏷️') || (currentIcon || '🏷️');
 
     try {
       await window.FlexiDB.updateCategory(id, newName.trim(), newIcon.trim());
@@ -1565,6 +1636,39 @@
         printBtn.onclick = () => {
           window.reprintPosSaleReceipt(sale.orderRef);
         };
+      }
+
+      // Refund / Return button on modal
+      const refundBtn = document.getElementById('order-modal-refund-btn');
+      if (refundBtn) {
+        if (sale.status === 'refunded') {
+          refundBtn.disabled = true;
+          refundBtn.className = 'px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 text-slate-400 text-xs font-bold cursor-not-allowed';
+          refundBtn.innerText = '✓ Commande Déjà Remboursée';
+        } else {
+          refundBtn.disabled = false;
+          refundBtn.className = 'px-3 py-2.5 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 text-rose-600 dark:text-rose-300 text-xs font-bold transition flex items-center gap-1.5';
+          refundBtn.innerHTML = '<span>🔄</span> <span>Retour / Annuler Vente</span>';
+          refundBtn.onclick = async () => {
+            const reason = prompt(`Motif du retour / annulation pour la commande #${sale.orderRef} :`, 'Retour client au comptoir');
+            if (reason === null) return;
+            try {
+              await window.CheckoutService.processRefund(sale.orderRef, reason || 'Retour client');
+              showToast(`Commande #${sale.orderRef} annulée et articles réintégrés en stock !`);
+              document.getElementById('pos-order-modal')?.classList.add('hidden');
+              await loadPosProducts();
+              await renderPosSalesHistory();
+              if (typeof window.renderInventoryWorkspace === 'function') {
+                window.renderInventoryWorkspace();
+              }
+              if (window.DebtService?.refreshDebtBadge) {
+                await window.DebtService.refreshDebtBadge();
+              }
+            } catch (refErr) {
+              showToast(refErr.message, 'error');
+            }
+          };
+        }
       }
 
       modal.classList.remove('hidden');

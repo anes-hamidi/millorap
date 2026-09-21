@@ -903,6 +903,10 @@
                 <span>⚙️</span> <span>Setup</span>
               </button>
 
+              <button onclick="openCategoryManagerModal()" class="px-3 py-2 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 text-xs font-bold flex items-center gap-1.5 transition shadow-sm" title="Gérer les Catégories">
+                <span>🏷️</span> <span>Catégories</span>
+              </button>
+
               <button id="open-add-product-btn" class="btn-gradient text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition">
                 <span>➕</span> <span>New Item</span>
               </button>
@@ -936,9 +940,22 @@
           
           <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
             <h3 class="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <span>🧾</span> Current Order (<span id="pos-cart-count">0</span>)
+              <span>🧾</span> Commande (<span id="pos-cart-count">0</span>)
             </h3>
-            <button id="pos-clear-cart" class="text-xs text-rose-500 hover:underline font-medium">Clear Cart</button>
+            <div class="flex items-center gap-2">
+              <button id="pos-park-cart-btn" onclick="window.parkCurrentPosCart ? window.parkCurrentPosCart() : null" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold" title="Mettre ce panier en attente pour servir le client suivant">⏸️ En attente</button>
+              <button id="pos-clear-cart" class="text-xs text-rose-500 hover:underline font-medium">Vider</button>
+            </div>
+          </div>
+
+          <!-- Parked Carts Notification Bar -->
+          <div id="pos-parked-carts-bar" class="hidden p-2 bg-indigo-50 dark:bg-indigo-950/60 rounded-xl border border-indigo-200 dark:border-indigo-800 text-xs flex items-center justify-between">
+            <span class="text-indigo-900 dark:text-indigo-200 font-bold flex items-center gap-1.5">
+              <span>⏸️</span> <span id="pos-parked-carts-count">0</span> panier(s) en attente
+            </span>
+            <button onclick="window.resumeLastParkedCart ? window.resumeLastParkedCart() : null" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-[11px] shadow-sm transition">
+              Reprendre ↩
+            </button>
           </div>
 
           <!-- Itemized Cart List -->
@@ -1706,9 +1723,12 @@
       </div>
 
       <!-- Action Buttons -->
-      <div class="flex items-center gap-2 pt-1">
-        <button id="order-modal-print-btn" class="btn-gradient flex-1 py-2.5 px-4 rounded-xl text-xs font-bold text-white shadow-md flex items-center justify-center gap-2">
-          <span>🖨️</span> <span>Imprimer le Ticket de Caisse</span>
+      <div class="flex items-center gap-2 pt-1 flex-wrap">
+        <button id="order-modal-print-btn" class="btn-gradient flex-1 py-2.5 px-4 rounded-xl text-xs font-bold text-white shadow-md flex items-center justify-center gap-2 min-w-[140px]">
+          <span>🖨️</span> <span>Imprimer Ticket</span>
+        </button>
+        <button id="order-modal-refund-btn" class="px-3 py-2.5 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 text-rose-600 dark:text-rose-300 text-xs font-bold transition flex items-center gap-1.5" title="Annuler la vente et réintégrer les articles en stock">
+          <span>🔄</span> <span>Retour / Annuler Vente</span>
         </button>
         <button id="order-modal-close-action-btn" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition">
           Fermer
@@ -1942,7 +1962,11 @@
               <span>•</span>
               <span>Plafond : <strong id="debt-modal-cust-limit" class="text-amber-600 font-bold">Illimité</strong></span>
               <span>•</span>
-              <button id="debt-modal-edit-profile-btn" class="text-indigo-600 dark:text-indigo-400 hover:underline font-bold font-sans">✏️ Modifier Profil</button>
+              <button id="debt-modal-edit-profile-btn" class="text-indigo-600 dark:text-indigo-400 hover:underline font-bold font-sans">✏️ Modifier</button>
+              <span>•</span>
+              <button id="debt-modal-print-stmt-btn" class="text-emerald-600 dark:text-emerald-400 hover:underline font-bold font-sans">🖨️ Relevé</button>
+              <span>•</span>
+              <button id="debt-modal-delete-cust-btn" class="text-rose-500 hover:underline font-bold font-sans">🗑️ Supprimer</button>
             </div>
           </div>
         </div>
