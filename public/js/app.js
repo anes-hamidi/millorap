@@ -95,6 +95,13 @@ const WORKSPACES = {
     icon: '🏦',
     sectionId: 'section-debts-app',
     navId: 'nav-debts'
+  },
+  suppliers: {
+    title: 'Fournisseurs & Commandes',
+    subtitle: 'Gestion des fournisseurs, bons de commande et réception des livraisons',
+    icon: '🏭',
+    sectionId: 'section-suppliers-app',
+    navId: 'nav-suppliers'
   }
 };
 
@@ -168,6 +175,9 @@ function switchAppMode(targetMode) {
       break;
     case 'debts':
       renderDebtsWorkspace();
+      break;
+    case 'suppliers':
+      renderSuppliersWorkspace();
       break;
   }
 }
@@ -332,10 +342,10 @@ async function renderInventoryWorkspace() {
           </td>
           <td class="text-center">
             <div class="inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 p-1">
-              <button onclick="quickAdjustStock(${p.id}, -1)" class="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 font-bold text-xs flex items-center justify-center">-1</button>
+              <button onclick="quickAdjustStock('${escapeHtml(String(p.id))}', -1)" class="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 font-bold text-xs flex items-center justify-center">-1</button>
               <span class="px-2 font-mono font-black text-xs min-w-[28px] text-center ${isOutOfStock ? 'text-rose-600' : isLowStock ? 'text-amber-600' : 'text-slate-800 dark:text-slate-100'}">${stock}</span>
-              <button onclick="quickAdjustStock(${p.id}, 1)" class="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 font-bold text-xs flex items-center justify-center">+1</button>
-              <button onclick="quickAdjustStock(${p.id}, 10)" class="px-1.5 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 font-bold text-[10px] flex items-center justify-center">+10</button>
+              <button onclick="quickAdjustStock('${escapeHtml(String(p.id))}', 1)" class="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 font-bold text-xs flex items-center justify-center">+1</button>
+              <button onclick="quickAdjustStock('${escapeHtml(String(p.id))}', 10)" class="px-1.5 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 font-bold text-[10px] flex items-center justify-center">+10</button>
             </div>
           </td>
           <td class="text-center">
@@ -343,7 +353,7 @@ async function renderInventoryWorkspace() {
           </td>
           <td class="text-right">
             <div class="flex items-center justify-end gap-1.5">
-              <button onclick="editProduct(${p.id})" class="p-1.5 px-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center gap-1" title="Edit Product">
+              <button onclick="editProduct('${escapeHtml(String(p.id))}')" class="p-1.5 px-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center gap-1" title="Edit Product">
                 <span>✏️</span> <span>Edit</span>
               </button>
             </div>
@@ -504,6 +514,37 @@ async function renderAnalyticsWorkspace(windowPeriod = '30days') {
             `;
           }).join('');
         }
+      }
+    }
+
+    // 5. Expiring Batches Alerts (D-7 / D-3)
+    if (window.AnalyticsService?.getExpiringBatches) {
+      try {
+        const expiringBatches = await window.AnalyticsService.getExpiringBatches(7);
+        const expiringContainer = document.getElementById('page-analytics-expiring-batches');
+        if (expiringContainer) {
+          if (expiringBatches.length === 0) {
+            expiringContainer.innerHTML = '<span class="text-emerald-600 text-xs font-semibold py-4 text-center">✅ Aucun lot en approche d\'expiration !</span>';
+          } else {
+            expiringContainer.innerHTML = expiringBatches.map(b => {
+              const isDanger = b.severity === 'danger';
+              return `
+                <div class="flex items-center justify-between p-2.5 rounded-xl ${isDanger ? 'bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900' : 'bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900'} text-xs">
+                  <div class="flex flex-col min-w-0">
+                    <span class="font-bold ${isDanger ? 'text-rose-700 dark:text-rose-300' : 'text-amber-800 dark:text-amber-200'} truncate">${escapeHtml(b.productName || 'Article')} ${b.batchNumber ? '(' + escapeHtml(b.batchNumber) + ')' : ''}</span>
+                    <span class="text-[10px] text-slate-400">Périme le ${new Date(b.expiryDate).toLocaleDateString()}</span>
+                  </div>
+                  <div class="flex items-center gap-2 font-mono">
+                    <span class="font-bold text-slate-700 dark:text-slate-300">${b.remainingQty != null ? b.remainingQty : b.initialQty} u.</span>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${isDanger ? 'bg-rose-500 text-white animate-pulse' : 'bg-amber-500 text-white'}">${b.daysRemaining <= 0 ? 'Expiré' : 'J-' + b.daysRemaining}</span>
+                  </div>
+                </div>
+              `;
+            }).join('');
+          }
+        }
+      } catch (expErr) {
+        console.warn('Expiring batches render error:', expErr);
       }
     }
 
@@ -1183,11 +1224,11 @@ async function renderDebtsWorkspace() {
           <td class="p-3.5 text-right">
             <div class="flex items-center justify-end gap-1.5">
               ${isOverdue ? `
-                <button onclick="openCustomerQuickPaymentModal(${c.id})" class="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition flex items-center gap-1" title="Encaisser un versement">
+                <button onclick="openCustomerQuickPaymentModal('${escapeHtml(String(c.id))}')" class="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition flex items-center gap-1" title="Encaisser un versement">
                   <span>💵</span> <span>Encaisser</span>
                 </button>
               ` : ''}
-              <button onclick="openCustomerDetailModal(${c.id})" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition flex items-center gap-1" title="Voir l'historique complet">
+              <button onclick="openCustomerDetailModal('${escapeHtml(String(c.id))}')" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition flex items-center gap-1" title="Voir l'historique complet">
                 <span>📋</span> <span>Détails</span>
               </button>
             </div>
@@ -1317,14 +1358,14 @@ async function openCustomerDetailModal(customerId) {
                 <span>Date : ${dateStr}</span>
                 <div class="flex items-center gap-2">
                   ${isOpen ? `
-                    <button onclick="openRecordPaymentModal(${de.id}, ${de.remainingAmount}, '${escapeHtml(customer.name)}')" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition">
+                    <button onclick="openRecordPaymentModal('${escapeHtml(String(de.id))}', ${de.remainingAmount}, '${escapeHtml(customer.name)}')" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition">
                       Encaisser un versement
                     </button>
-                    <button onclick="handleWriteOffDebt(${de.id}, ${customer.id})" class="px-2 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-rose-100 dark:hover:bg-rose-950 text-slate-600 dark:text-slate-300 hover:text-rose-600 text-xs transition" title="Passer en perte irrécouvrable">
+                    <button onclick="handleWriteOffDebt('${escapeHtml(String(de.id))}', '${escapeHtml(String(customer.id))}')" class="px-2 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-rose-100 dark:hover:bg-rose-950 text-slate-600 dark:text-slate-300 hover:text-rose-600 text-xs transition" title="Passer en perte irrécouvrable">
                       Passer en perte
                     </button>
                   ` : (isWrittenOff ? `
-                    <button onclick="handleReverseWriteOff(${de.id}, ${customer.id})" class="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold transition">
+                    <button onclick="handleReverseWriteOff('${escapeHtml(String(de.id))}', '${escapeHtml(String(customer.id))}')" class="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold transition">
                       Restaurer la dette
                     </button>
                   ` : '')}
@@ -1801,16 +1842,530 @@ async function saveManualDebt() {
     document.getElementById('debt-manual-modal')?.classList.add('hidden');
     showToast(`Créance enregistrée pour ${customer.name} (${(amount - paidNow).toFixed(2)} DA restant)`);
     await renderDebtsWorkspace();
-  } catch (e) {
-    showToast('Erreur : ' + e.message, 'error');
+  } catch (err) {
+    showToast('Erreur lors de l\'enregistrement de la créance : ' + err.message, 'error');
   }
 }
 window.saveManualDebt = saveManualDebt;
 
 // ==========================================
+// WORKSPACE: SETTINGS & TERMINAL ID
+// ==========================================
+function renderSettingsWorkspace() {
+  const terminalInput = document.getElementById('settings-terminal-id-input');
+  if (terminalInput) {
+    terminalInput.value = localStorage.getItem('pos_terminal_id') || 'REG-01';
+  }
+}
+window.renderSettingsWorkspace = renderSettingsWorkspace;
+
+function saveTerminalIdSetting() {
+  const input = document.getElementById('settings-terminal-id-input');
+  const val = (input?.value || '').trim().toUpperCase() || 'REG-01';
+  localStorage.setItem('pos_terminal_id', val);
+  if (input) input.value = val;
+  if (window.POS?.updateSyncBadge) {
+    window.POS.updateSyncBadge();
+  }
+  showToast(`Identifiant de caisse enregistré : ${val}`);
+}
+window.saveTerminalIdSetting = saveTerminalIdSetting;
+
+// ==========================================
+// WORKSPACE: SUPPLIERS & PURCHASE ORDERS
+// ==========================================
+let currentSuppliersSubTab = 'orders';
+
+function switchSuppliersSubTab(tab) {
+  currentSuppliersSubTab = tab;
+  const btnOrders = document.getElementById('suppliers-tab-btn-orders');
+  const btnList = document.getElementById('suppliers-tab-btn-list');
+  const subOrders = document.getElementById('suppliers-subview-orders');
+  const subList = document.getElementById('suppliers-subview-list');
+
+  if (tab === 'orders') {
+    if (btnOrders) btnOrders.className = 'px-4 py-2 rounded-xl text-xs font-bold transition bg-indigo-600 text-white shadow-sm';
+    if (btnList) btnList.className = 'px-4 py-2 rounded-xl text-xs font-bold transition bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200';
+    if (subOrders) subOrders.classList.remove('hidden');
+    if (subList) subList.classList.add('hidden');
+  } else {
+    if (btnOrders) btnOrders.className = 'px-4 py-2 rounded-xl text-xs font-bold transition bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200';
+    if (btnList) btnList.className = 'px-4 py-2 rounded-xl text-xs font-bold transition bg-indigo-600 text-white shadow-sm';
+    if (subOrders) subOrders.classList.add('hidden');
+    if (subList) subList.classList.remove('hidden');
+  }
+}
+window.switchSuppliersSubTab = switchSuppliersSubTab;
+
+async function renderSuppliersWorkspace() {
+  if (!window.SupplierService) return;
+  try {
+    const [suppliers, orders] = await Promise.all([
+      window.SupplierService.getAllSuppliers(),
+      window.SupplierService.getAllPurchaseOrders()
+    ]);
+
+    // Update KPIs
+    const kpiCount = document.getElementById('suppliers-kpi-count');
+    const kpiPending = document.getElementById('suppliers-kpi-pending-po');
+    const kpiTotal = document.getElementById('suppliers-kpi-total-orders');
+
+    if (kpiCount) kpiCount.innerText = suppliers.length;
+    if (kpiPending) kpiPending.innerText = orders.filter(o => o.status === 'pending').length;
+    if (kpiTotal) kpiTotal.innerText = orders.length;
+
+    // 1. Render Purchase Orders Table
+    const poLabel = document.getElementById('po-count-label');
+    if (poLabel) poLabel.innerText = `${orders.length} commande(s)`;
+
+    const poTableBody = document.getElementById('purchase-orders-table-body');
+    if (poTableBody) {
+      if (orders.length === 0) {
+        poTableBody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400 text-xs">Aucun bon de commande enregistré.</td></tr>';
+      } else {
+        poTableBody.innerHTML = orders.map(po => {
+          const dateStr = new Date(po.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+          const isPending = po.status === 'pending';
+          const isReceived = po.status === 'received';
+          const statusBadge = isPending
+            ? '<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 animate-pulse">🟡 EN ATTENTE</span>'
+            : isReceived
+            ? '<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">🟢 RÉCEPTIONNÉ</span>'
+            : '<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">⚪ ANNULÉ</span>';
+
+          const safeId = escapeHtml(String(po.id));
+
+          return `
+            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition text-xs">
+              <td class="p-3.5 font-mono font-bold text-slate-900 dark:text-slate-100">${escapeHtml(po.orderRef || 'DZ-PO')}</td>
+              <td class="p-3.5 font-semibold text-slate-800 dark:text-slate-200">${escapeHtml(po.supplierName || 'Fournisseur')}</td>
+              <td class="p-3.5 text-slate-500 font-mono text-[11px]">${dateStr}</td>
+              <td class="p-3.5 text-center font-bold">${po.itemsCount || po.itemCount || po.totalOrdered || 0} article(s)</td>
+              <td class="p-3.5 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">${Number(po.totalAmount || po.totalEstimatedAmount || 0).toFixed(2)} DA</td>
+              <td class="p-3.5 text-center">${statusBadge}</td>
+              <td class="p-3.5 text-right">
+                <div class="flex items-center justify-end gap-1.5">
+                  ${isPending ? `
+                    <button onclick="openReceiveDeliveryModal('${safeId}')" class="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition flex items-center gap-1" title="Réceptionner la livraison">
+                      <span>🚚</span> <span>Réceptionner</span>
+                    </button>
+                    <button onclick="handleCancelPurchaseOrder('${safeId}')" class="px-2 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-rose-50 text-slate-500 hover:text-rose-600 text-xs transition" title="Annuler commande">
+                      ✕
+                    </button>
+                  ` : ''}
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+
+    // 2. Render Suppliers Directory Table
+    const supLabel = document.getElementById('suppliers-count-label');
+    if (supLabel) supLabel.innerText = `${suppliers.length} fournisseur(s)`;
+
+    const supTableBody = document.getElementById('suppliers-table-body');
+    if (supTableBody) {
+      if (suppliers.length === 0) {
+        supTableBody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Aucun fournisseur enregistré. Cliquez sur "Ajouter Fournisseur".</td></tr>';
+      } else {
+        supTableBody.innerHTML = suppliers.map(s => {
+          const supplierOrders = orders.filter(o => String(o.supplierId) === String(s.id));
+          const pendingOrders = supplierOrders.filter(o => o.status === 'pending').length;
+          const safeId = escapeHtml(String(s.id));
+
+          return `
+            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition text-xs">
+              <td class="p-3.5 font-bold text-slate-800 dark:text-slate-100">
+                <div class="flex items-center gap-2">
+                  <span class="text-base">🏭</span>
+                  <span>${escapeHtml(s.name)}</span>
+                </div>
+              </td>
+              <td class="p-3.5 text-slate-500 font-mono">${escapeHtml(s.phone || 'Non renseigné')}</td>
+              <td class="p-3.5 text-center font-bold">${supplierOrders.length}</td>
+              <td class="p-3.5 text-center">
+                ${pendingOrders > 0 ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">${pendingOrders} en cours</span>` : '<span class="text-slate-400">0</span>'}
+              </td>
+              <td class="p-3.5 text-right">
+                <div class="flex items-center justify-end gap-1.5">
+                  <button onclick="openSupplierModal('${safeId}')" class="p-1.5 px-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-bold text-xs transition flex items-center gap-1">
+                    <span>✏️</span> <span>Modifier</span>
+                  </button>
+                  <button onclick="handleDeleteSupplier('${safeId}')" class="p-1.5 px-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-rose-50 text-slate-400 hover:text-rose-600 text-xs transition" title="Supprimer">
+                    🗑️
+                  </button>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+
+  } catch (err) {
+    console.error('Suppliers workspace render error:', err);
+  }
+}
+window.renderSuppliersWorkspace = renderSuppliersWorkspace;
+
+// Supplier Modal & Form Handlers
+async function openSupplierModal(supplierId = null) {
+  const modal = document.getElementById('supplier-form-modal');
+  const title = document.getElementById('supplier-modal-title');
+  const idInput = document.getElementById('supplier-form-id');
+  const nameInput = document.getElementById('supplier-form-name');
+  const phoneInput = document.getElementById('supplier-form-phone');
+
+  if (!modal) return;
+
+  if (supplierId) {
+    try {
+      const s = await window.SupplierService.getSupplierById(supplierId);
+      if (s) {
+        if (title) title.innerHTML = '<span>✏️</span> Modifier le Fournisseur';
+        if (idInput) idInput.value = s.id;
+        if (nameInput) nameInput.value = s.name;
+        if (phoneInput) phoneInput.value = s.phone || '';
+      }
+    } catch (e) {
+      showToast('Fournisseur introuvable', 'error');
+      return;
+    }
+  } else {
+    if (title) title.innerHTML = '<span>🏭</span> Ajouter un Fournisseur';
+    if (idInput) idInput.value = '';
+    if (nameInput) nameInput.value = '';
+    if (phoneInput) phoneInput.value = '';
+  }
+
+  modal.classList.remove('hidden');
+  nameInput?.focus();
+}
+window.openSupplierModal = openSupplierModal;
+
+async function handleSupplierSubmit(event) {
+  event.preventDefault();
+  const id = document.getElementById('supplier-form-id')?.value;
+  const name = (document.getElementById('supplier-form-name')?.value || '').trim();
+  const phone = (document.getElementById('supplier-form-phone')?.value || '').trim();
+
+  if (!name) {
+    showToast('Le nom du fournisseur est obligatoire', 'error');
+    return;
+  }
+
+  try {
+    if (id) {
+      await window.SupplierService.updateSupplier(id, { name, phone });
+      showToast(`Fournisseur "${name}" mis à jour`);
+    } else {
+      await window.SupplierService.createSupplier({ name, phone });
+      showToast(`Fournisseur "${name}" ajouté avec succès`);
+    }
+    document.getElementById('supplier-form-modal')?.classList.add('hidden');
+    await renderSuppliersWorkspace();
+  } catch (e) {
+    showToast('Erreur: ' + e.message, 'error');
+  }
+}
+window.handleSupplierSubmit = handleSupplierSubmit;
+
+async function handleDeleteSupplier(supplierId) {
+  if (!confirm('Confirmez-vous la suppression de ce fournisseur ?')) return;
+  try {
+    await window.SupplierService.deleteSupplier(supplierId);
+    showToast('Fournisseur supprimé');
+    await renderSuppliersWorkspace();
+  } catch (e) {
+    showToast('Erreur: ' + e.message, 'error');
+  }
+}
+window.handleDeleteSupplier = handleDeleteSupplier;
+
+// Purchase Order Creation Modal
+async function openPurchaseOrderModal() {
+  const modal = document.getElementById('po-form-modal');
+  const supplierSelect = document.getElementById('po-form-supplier');
+  const itemsContainer = document.getElementById('po-form-items-container');
+  const dateInput = document.getElementById('po-form-date');
+
+  if (!modal || !supplierSelect || !itemsContainer) return;
+
+  try {
+    const suppliers = await window.SupplierService.getAllSuppliers();
+    supplierSelect.innerHTML = '<option value="">Sélectionner un fournisseur...</option>' + suppliers.map(s => `
+      <option value="${escapeHtml(String(s.id))}">${escapeHtml(s.name)}</option>
+    `).join('');
+
+    // Default expected date to in 3 days
+    if (dateInput) {
+      const d = new Date();
+      d.setDate(d.getDate() + 3);
+      dateInput.value = d.toISOString().split('T')[0];
+    }
+
+    itemsContainer.innerHTML = '';
+    await addPoItemRow();
+
+    modal.classList.remove('hidden');
+  } catch (e) {
+    showToast('Erreur chargement fournisseurs: ' + e.message, 'error');
+  }
+}
+window.openPurchaseOrderModal = openPurchaseOrderModal;
+
+let cachedPoProducts = [];
+
+async function addPoItemRow() {
+  const container = document.getElementById('po-form-items-container');
+  if (!container) return;
+
+  try {
+    if (!cachedPoProducts || cachedPoProducts.length === 0) {
+      if (window.FlexiDB?.db) {
+        cachedPoProducts = await window.FlexiDB.db.products.toArray();
+      }
+    }
+
+    const row = document.createElement('div');
+    row.className = 'po-item-row p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 grid grid-cols-12 gap-2 items-center text-xs';
+    row.innerHTML = `
+      <div class="col-span-5">
+        <label class="block text-[10px] text-slate-400 font-bold mb-0.5">Produit *</label>
+        <select class="po-row-product w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-semibold" onchange="onPoProductSelectChange(this)">
+          <option value="">Sélectionner produit...</option>
+          ${cachedPoProducts.map(p => `
+            <option value="${escapeHtml(String(p.id))}" data-cost="${p.costPrice || 0}">${escapeHtml(p.name)}</option>
+          `).join('')}
+        </select>
+      </div>
+      <div class="col-span-3">
+        <label class="block text-[10px] text-slate-400 font-bold mb-0.5">Qté Commandée *</label>
+        <input type="number" min="1" value="10" class="po-row-qty w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-center">
+      </div>
+      <div class="col-span-3">
+        <label class="block text-[10px] text-slate-400 font-bold mb-0.5">Coût Unitaire (DA)</label>
+        <input type="number" min="0" step="1" value="0" class="po-row-cost w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-right font-mono">
+      </div>
+      <div class="col-span-1 flex items-end justify-center pt-3">
+        <button type="button" onclick="removePoItemRow(this)" class="p-1.5 text-slate-400 hover:text-rose-600 font-bold text-sm">✕</button>
+      </div>
+    `;
+
+    container.appendChild(row);
+  } catch (e) {
+    console.warn('Error adding PO item row:', e);
+  }
+}
+window.addPoItemRow = addPoItemRow;
+
+function onPoProductSelectChange(selectEl) {
+  const selectedOption = selectEl.options[selectEl.selectedIndex];
+  const cost = selectedOption?.dataset?.cost || '0';
+  const row = selectEl.closest('.po-item-row');
+  const costInput = row?.querySelector('.po-row-cost');
+  if (costInput) costInput.value = cost;
+}
+window.onPoProductSelectChange = onPoProductSelectChange;
+
+function removePoItemRow(btn) {
+  const rows = document.querySelectorAll('.po-item-row');
+  if (rows.length <= 1) {
+    showToast('Le bon de commande doit contenir au moins un article', 'error');
+    return;
+  }
+  btn.closest('.po-item-row')?.remove();
+}
+window.removePoItemRow = removePoItemRow;
+
+async function handlePurchaseOrderSubmit(event) {
+  event.preventDefault();
+  const supplierId = document.getElementById('po-form-supplier')?.value;
+  const expectedDate = document.getElementById('po-form-date')?.value || null;
+  const rows = document.querySelectorAll('.po-item-row');
+
+  if (!supplierId) {
+    showToast('Veuillez sélectionner un fournisseur', 'error');
+    return;
+  }
+
+  const items = [];
+  for (const row of rows) {
+    const productId = row.querySelector('.po-row-product')?.value;
+    const quantity = parseInt(row.querySelector('.po-row-qty')?.value, 10) || 0;
+    const unitCost = parseFloat(row.querySelector('.po-row-cost')?.value) || 0;
+
+    if (productId && quantity > 0) {
+      items.push({ productId, quantityOrdered: quantity, quantity, unitCost });
+    }
+  }
+
+  if (items.length === 0) {
+    showToast('Veuillez ajouter au moins un produit avec une quantité valide', 'error');
+    return;
+  }
+
+  try {
+    const po = await window.SupplierService.createPurchaseOrder({
+      supplierId,
+      expectedDate,
+      items
+    });
+
+    showToast(`Bon de commande #${po.orderRef} créé avec succès !`);
+    document.getElementById('po-form-modal')?.classList.add('hidden');
+    await renderSuppliersWorkspace();
+  } catch (e) {
+    showToast('Erreur création BC: ' + e.message, 'error');
+  }
+}
+window.handlePurchaseOrderSubmit = handlePurchaseOrderSubmit;
+
+// Delivery Receiving Modal
+async function openReceiveDeliveryModal(poId) {
+  const modal = document.getElementById('po-receive-modal');
+  const idInput = document.getElementById('po-receive-id');
+  const subtitle = document.getElementById('po-receive-subtitle');
+  const container = document.getElementById('po-receive-items-container');
+
+  if (!modal || !idInput || !container) return;
+
+  try {
+    const data = await window.SupplierService.getPurchaseOrderById(poId);
+    if (!data) {
+      showToast('Bon de commande introuvable', 'error');
+      return;
+    }
+
+    const order = data.order || data;
+    const items = data.items || [];
+    idInput.value = order.id;
+    if (subtitle) subtitle.innerText = `BC #${order.orderRef} — Fournisseur: ${order.supplierName || 'Fournisseur'}`;
+
+    container.innerHTML = items.map(item => `
+      <div class="receive-row p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 flex flex-col gap-2.5" 
+           data-item-id="${escapeHtml(String(item.id))}" 
+           data-product-id="${escapeHtml(String(item.productId))}">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-base">${item.icon || '📦'}</span>
+            <div>
+              <span class="font-bold text-slate-800 dark:text-slate-100 text-xs">${escapeHtml(item.productName || 'Produit')}</span>
+              <span class="text-[10px] text-slate-400 block font-mono">Stock en rayon : <strong class="text-slate-700 dark:text-slate-300">${item.currentStock || 0} u.</strong></span>
+            </div>
+          </div>
+          <div class="text-right font-mono text-[11px]">
+            <span class="text-slate-500">Commandé : <strong class="text-slate-800 dark:text-slate-200">${item.quantityOrdered}</strong></span>
+            ${(item.quantityReceived || 0) > 0 ? `<span class="text-emerald-600 block text-[10px] font-bold">Déjà reçu : ${item.quantityReceived}</span>` : ''}
+          </div>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
+          <div>
+            <label class="block text-[10px] text-slate-400 font-bold mb-0.5">Qté à Réceptionner *</label>
+            <input type="number" min="0" value="${Math.max(0, (item.quantityOrdered || 0) - (item.quantityReceived || 0))}" class="receive-item-qty w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-center text-xs">
+          </div>
+          <div>
+            <label class="block text-[10px] text-slate-400 font-bold mb-0.5">Prix d'Achat (DA)</label>
+            <input type="number" min="0" step="1" value="${item.unitCost || 0}" class="receive-item-cost w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-right font-mono text-xs" title="Mettre à jour le prix de revient">
+          </div>
+          <div>
+            <label class="block text-[10px] text-slate-400 font-bold mb-0.5">Prix de Vente (DA)</label>
+            <input type="number" min="0" step="1" value="${item.sellingPrice || ''}" placeholder="Inchangé" class="receive-item-selling-price w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-right font-mono text-xs" title="Modifier le prix de vente en caisse si besoin">
+          </div>
+          <div>
+            <label class="block text-[10px] text-slate-400 font-bold mb-0.5">Date Péremption</label>
+            <input type="date" class="receive-item-expiry w-full px-2 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono">
+          </div>
+          <div>
+            <label class="block text-[10px] text-slate-400 font-bold mb-0.5">N° de Lot (Batch)</label>
+            <input type="text" placeholder="ex: LOT-${new Date().getFullYear()}" class="receive-item-batch w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-mono">
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    modal.classList.remove('hidden');
+  } catch (e) {
+    showToast('Erreur ouverture réception: ' + e.message, 'error');
+  }
+}
+window.openReceiveDeliveryModal = openReceiveDeliveryModal;
+
+async function handleReceiveDeliverySubmit(event) {
+  event.preventDefault();
+  const poId = document.getElementById('po-receive-id')?.value;
+  const rows = document.querySelectorAll('.receive-row');
+
+  if (!poId) return;
+
+  const items = [];
+  rows.forEach(row => {
+    const itemId = row.dataset.itemId;
+    const productId = row.dataset.productId;
+    const receivedQuantity = parseInt(row.querySelector('.receive-item-qty')?.value, 10) || 0;
+    const unitCost = parseFloat(row.querySelector('.receive-item-cost')?.value) || 0;
+    const sellingPrice = parseFloat(row.querySelector('.receive-item-selling-price')?.value) || null;
+    const expiryDate = row.querySelector('.receive-item-expiry')?.value || null;
+    const batchNumber = (row.querySelector('.receive-item-batch')?.value || '').trim() || null;
+
+    if (productId && receivedQuantity > 0) {
+      items.push({
+        itemId,
+        productId,
+        quantityReceived: receivedQuantity,
+        receivedQuantity,
+        unitCost,
+        sellingPrice,
+        expiryDate,
+        batchNumber
+      });
+    }
+  });
+
+  if (items.length === 0) {
+    showToast('Veuillez renseigner au moins un article avec une quantité reçue > 0', 'error');
+    return;
+  }
+
+  try {
+    const res = await window.SupplierService.receiveDelivery(poId, { items });
+    const statusLabel = res.status === 'received' ? 'RÉCEPTIONNÉ' : 'PARTIEL';
+    showToast(`Livraison validée avec succès ! Commande passée à "${statusLabel}".`);
+    document.getElementById('po-receive-modal')?.classList.add('hidden');
+    
+    // Refresh all affected workspaces and in-memory caches
+    await renderSuppliersWorkspace();
+    if (window.renderInventoryWorkspace) await window.renderInventoryWorkspace();
+    if (window.loadPosProducts) await window.loadPosProducts();
+    if (window.POS?.loadProducts) await window.POS.loadProducts();
+    if (window.POS?.updateExpiryBadge) await window.POS.updateExpiryBadge();
+    if (window.renderAnalyticsWorkspace) await window.renderAnalyticsWorkspace();
+  } catch (e) {
+    showToast('Erreur réception livraison: ' + e.message, 'error');
+  }
+}
+window.handleReceiveDeliverySubmit = handleReceiveDeliverySubmit;
+
+async function handleCancelPurchaseOrder(poId) {
+  if (!confirm('Confirmez-vous l\'annulation de ce bon de commande ?')) return;
+  try {
+    await window.SupplierService.cancelPurchaseOrder(poId);
+    showToast('Bon de commande annulé');
+    await renderSuppliersWorkspace();
+  } catch (e) {
+    showToast('Erreur: ' + e.message, 'error');
+  }
+}
+window.handleCancelPurchaseOrder = handleCancelPurchaseOrder;
+
+// ==========================================
 // DOM READY INITIALIZATION
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
+  // Settings Workspace Terminal ID Save Listener
+  document.getElementById('settings-save-terminal-btn')?.addEventListener('click', saveTerminalIdSetting);
   // Sidebar Navigation Click Listeners
   document.querySelectorAll('.nav-link').forEach(btn => {
     btn.addEventListener('click', () => {

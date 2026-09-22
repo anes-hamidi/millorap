@@ -2,6 +2,11 @@
 // POINT OF SALE (POS) - 100% STANDALONE OFFLINE INDEXEDDB CONTROLLER
 // ==========================================
 (function() {
+  function escapeHtml(str) {
+    return str ? String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])) : '';
+  }
+  window.escapeHtml = escapeHtml;
+
   const FALLBACK_SEED_PRODUCTS = [
     { id: 1, barcode: '890123456001', name: 'Café Espresso', category: 'Beverage', costPrice: 60, sellingPrice: 150, currentStock: 99, lowStockThreshold: 15, icon: '☕', image: 'https://images.unsplash.com/photo-1510591509098-f4fdc6d0ff04?w=400&auto=format&fit=crop&q=80' },
     { id: 2, barcode: '890123456002', name: 'Thé Vert Naturel', category: 'Beverage', costPrice: 40, sellingPrice: 100, currentStock: 50, lowStockThreshold: 10, icon: '🍵', image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=400&auto=format&fit=crop&q=80' },
@@ -160,6 +165,8 @@
       }
       renderPosProducts();
       updateLowStockBadge();
+      updateExpiryBadge();
+      updateSyncBadge();
     } catch (e) {
       console.error('Error in loadPosProducts:', e);
       renderPosProducts();
@@ -193,6 +200,75 @@
       }
     }
   }
+
+  async function updateExpiryBadge() {
+    try {
+      if (!window.AnalyticsService || !window.AnalyticsService.getExpiringBatches) return;
+      const batches = await window.AnalyticsService.getExpiringBatches(7);
+      const badge = document.getElementById('expiry-alert-badge');
+      const navBadge = document.getElementById('nav-expiry-badge');
+      const count = batches.length;
+      const hasDanger = batches.some(b => b.severity === 'danger');
+
+      if (badge) {
+        if (count > 0) {
+          badge.classList.remove('hidden');
+          badge.className = `flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition ${hasDanger ? 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/60 dark:border-rose-800 dark:text-rose-300 animate-pulse' : 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/60 dark:border-amber-800 dark:text-amber-300'}`;
+          badge.innerHTML = `<span>⏳</span> <span>${count} Lot(s) Périment Bientôt</span>`;
+        } else {
+          badge.classList.add('hidden');
+        }
+      }
+
+      if (navBadge) {
+        if (count > 0) {
+          navBadge.classList.remove('hidden');
+          navBadge.innerText = count;
+          navBadge.className = `px-1.5 py-0.5 rounded-full text-[10px] font-black ${hasDanger ? 'bg-rose-500 text-white' : 'bg-amber-500 text-white'}`;
+        } else {
+          navBadge.classList.add('hidden');
+        }
+      }
+    } catch (e) {
+      console.warn('updateExpiryBadge error:', e);
+    }
+  }
+  window.updateExpiryBadge = updateExpiryBadge;
+
+  function updateSyncBadge() {
+    const badge = document.getElementById('sync-status-badge');
+    if (!badge) return;
+
+    const terminalId = localStorage.getItem('pos_terminal_id') || 'REG-01';
+    const db = window.FlexiDB?.db;
+
+    if (db && db.cloud && typeof db.cloud.syncState?.subscribe === 'function') {
+      try {
+        db.cloud.syncState.subscribe(state => {
+          if (!state) return;
+          if (state.phase === 'in-sync' || state.status === 'online') {
+            badge.className = 'flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800';
+            badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> <span>Cloud (${terminalId})</span>`;
+          } else if (state.phase === 'connecting' || state.phase === 'syncing') {
+            badge.className = 'flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 animate-pulse';
+            badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-indigo-500"></span> <span>Synchro...</span>`;
+          } else if (state.status === 'offline') {
+            badge.className = 'flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800';
+            badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500"></span> <span>Hors-ligne (${terminalId})</span>`;
+          } else if (state.phase === 'error') {
+            badge.className = 'flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800';
+            badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-500"></span> <span>Erreur Sync</span>`;
+          }
+        });
+        return;
+      } catch (e) {}
+    }
+
+    // Default standalone / local indicator
+    badge.className = 'flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
+    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> <span>Local (${terminalId})</span>`;
+  }
+  window.updateSyncBadge = updateSyncBadge;
 
   function renderPosProducts() {
     const grid = document.getElementById('pos-product-grid');
@@ -236,6 +312,10 @@
       const isOutOfStock = stockVal <= 0;
       const price = Number(p.sellingPrice || p.price || 0);
       const safeId = escapeHtml(String(p.id));
+      const hasPack = p.unitsPerPack && Number(p.unitsPerPack) > 1;
+      const packMultiplier = hasPack ? Number(p.unitsPerPack) : 1;
+      const packPrice = hasPack ? Number(p.packPrice || (price * packMultiplier)) : 0;
+      const packLabel = escapeHtml(p.packUnitLabel || 'Pack');
 
       return `
       <div id="product-card-${safeId}" class="glass-panel overflow-hidden rounded-2xl border ${isOutOfStock ? 'border-rose-300 dark:border-rose-900 opacity-75' : isLowStock ? 'border-amber-300 dark:border-amber-800' : 'border-slate-200/80 dark:border-slate-800'} shadow-sm hover:border-indigo-500 hover:shadow-lg transition-all flex flex-col justify-between group relative bg-white/70 dark:bg-slate-900/70">
@@ -273,10 +353,22 @@
           <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
             <div class="flex flex-col">
               <span class="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 font-mono">${price.toFixed(2)} DA</span>
+              ${hasPack ? `<span class="text-[10px] text-purple-600 dark:text-purple-400 font-bold font-mono">${packPrice.toFixed(2)} DA <span class="text-[9px] text-slate-400 font-normal">/${packLabel} (×${packMultiplier})</span></span>` : ''}
             </div>
-            <button onclick="addToPosCart('${safeId}')" ${isOutOfStock ? 'disabled' : ''} class="${isOutOfStock ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed' : 'btn-gradient text-white shadow-sm hover:scale-105 active:scale-95'} px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition">
-              <span>+</span> <span>Add</span>
-            </button>
+            ${hasPack ? `
+              <div class="flex items-center gap-1">
+                <button onclick="addToPosCart('${safeId}', 'unit')" ${isOutOfStock ? 'disabled' : ''} class="${isOutOfStock ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed' : 'bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800'} px-2 py-1.5 rounded-xl text-[10px] font-bold transition" title="Ajouter une unité">
+                  + Unité
+                </button>
+                <button onclick="addToPosCart('${safeId}', 'pack')" ${stockVal < packMultiplier ? 'disabled' : ''} class="${stockVal < packMultiplier ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed' : 'btn-gradient text-white shadow-sm hover:scale-105 active:scale-95'} px-2 py-1.5 rounded-xl text-[10px] font-bold transition" title="Ajouter un ${packLabel}">
+                  + ${packLabel}
+                </button>
+              </div>
+            ` : `
+              <button onclick="addToPosCart('${safeId}', 'unit')" ${isOutOfStock ? 'disabled' : ''} class="${isOutOfStock ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed' : 'btn-gradient text-white shadow-sm hover:scale-105 active:scale-95'} px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition">
+                <span>+</span> <span>Add</span>
+              </button>
+            `}
           </div>
         </div>
 
@@ -510,6 +602,14 @@
       document.getElementById('product-form-icon').value = productToEdit.icon || '📦';
       document.getElementById('product-form-image').value = productToEdit.image || '';
       document.getElementById('product-form-barcode').value = productToEdit.barcode || '';
+      const unitsPerPackInput = document.getElementById('product-form-units-per-pack');
+      if (unitsPerPackInput) unitsPerPackInput.value = productToEdit.unitsPerPack || 1;
+      const packLabelInput = document.getElementById('product-form-pack-label');
+      if (packLabelInput) packLabelInput.value = productToEdit.packUnitLabel || '';
+      const packPriceInput = document.getElementById('product-form-pack-price');
+      if (packPriceInput) packPriceInput.value = productToEdit.packPrice != null ? productToEdit.packPrice : '';
+      const packDefaultCheck = document.getElementById('product-form-pack-default');
+      if (packDefaultCheck) packDefaultCheck.checked = Boolean(productToEdit.sellByPackDefault);
       deleteBtn.classList.remove('hidden');
     } else {
       title.innerHTML = `<span>➕</span> Add New Product`;
@@ -522,6 +622,14 @@
       const threshInput = document.getElementById('product-form-threshold');
       if (threshInput) threshInput.value = '10';
       document.getElementById('product-form-barcode').value = prefilledBarcode || '';
+      const unitsPerPackInput = document.getElementById('product-form-units-per-pack');
+      if (unitsPerPackInput) unitsPerPackInput.value = '1';
+      const packLabelInput = document.getElementById('product-form-pack-label');
+      if (packLabelInput) packLabelInput.value = '';
+      const packPriceInput = document.getElementById('product-form-pack-price');
+      if (packPriceInput) packPriceInput.value = '';
+      const packDefaultCheck = document.getElementById('product-form-pack-default');
+      if (packDefaultCheck) packDefaultCheck.checked = false;
       deleteBtn.classList.add('hidden');
     }
 
@@ -558,6 +666,11 @@
     const icon = document.getElementById('product-form-icon').value.trim() || '📦';
     const image = document.getElementById('product-form-image').value.trim();
     const barcode = document.getElementById('product-form-barcode').value.trim();
+    const unitsPerPack = parseInt(document.getElementById('product-form-units-per-pack')?.value, 10) || 1;
+    const packUnitLabel = document.getElementById('product-form-pack-label')?.value.trim() || 'pack';
+    const packPriceVal = document.getElementById('product-form-pack-price')?.value;
+    const packPrice = packPriceVal ? parseFloat(packPriceVal) : null;
+    const sellByPackDefault = document.getElementById('product-form-pack-default')?.checked || false;
 
     if (!name || sellingPrice <= 0) {
       showToast('Please provide a valid product name and selling price', 'error');
@@ -566,12 +679,13 @@
 
     try {
       if (idStr) {
-        const id = parseInt(idStr, 10) || idStr;
+        const id = isNaN(Number(idStr)) ? idStr : (idStr.length < 10 ? parseInt(idStr, 10) : idStr);
         const existing = await db.products.get(id);
         const prevStock = existing ? existing.currentStock : currentStock;
 
         await db.products.update(id, {
           name, category, sellingPrice, costPrice, currentStock, lowStockThreshold, icon, image, barcode,
+          unitsPerPack, packUnitLabel, packPrice, sellByPackDefault,
           updatedAt: new Date().toISOString()
         });
 
@@ -591,6 +705,7 @@
       } else {
         const newId = await db.products.add({
           name, category, sellingPrice, costPrice, currentStock, lowStockThreshold, icon, image, barcode,
+          unitsPerPack, packUnitLabel, packPrice, sellByPackDefault,
           createdAt: new Date().toISOString()
         });
         await db.stockLogs.add({
@@ -696,7 +811,7 @@
   };
 
   // --- Cart Operations ---
-  window.addToPosCart = (productId) => {
+  window.addToPosCart = (productId, requestedUnit = null) => {
     const product = productMap.get(productId) || productMap.get(Number(productId)) || productMap.get(String(productId)) || posProducts.find(p => String(p.id) === String(productId));
     if (!product) return;
 
@@ -706,21 +821,41 @@
       return;
     }
 
-    const existing = posCart.find(item => String(item.id) === String(productId));
+    const saleUnit = requestedUnit || ((product.sellByPackDefault && product.unitsPerPack > 1) ? 'pack' : 'unit');
+    const hasPack = product.unitsPerPack && Number(product.unitsPerPack) > 1;
+    const unitMultiplier = (saleUnit === 'pack' && hasPack) ? Number(product.unitsPerPack) : 1;
+    const baseSellingPrice = Number(product.sellingPrice || product.price || 0);
+    const linePrice = (saleUnit === 'pack' && hasPack)
+      ? Number(product.packPrice || (baseSellingPrice * unitMultiplier))
+      : baseSellingPrice;
+    const lineCost = Number(product.costPrice || 0) * unitMultiplier;
+
+    // Check total base units currently in cart for this product
+    const totalUnitsInCart = posCart
+      .filter(item => String(item.id) === String(productId))
+      .reduce((sum, item) => sum + (item.qty * (item.unitMultiplier || 1)), 0);
+
+    if (totalUnitsInCart + unitMultiplier > currentStock) {
+      showToast(`Quantité max atteinte (${currentStock} unités au total en stock).`, 'error');
+      return;
+    }
+
+    const existing = posCart.find(item => String(item.id) === String(productId) && (item.saleUnit || 'unit') === saleUnit);
     if (existing) {
-      if (existing.qty + 1 > currentStock) {
-        showToast(`Quantité max atteinte (${currentStock} unités en stock).`, 'error');
-        return;
-      }
       existing.qty += 1;
     } else {
       posCart.push({
         id: product.id,
         name: product.name,
-        price: Number(product.sellingPrice || product.price || 0),
-        cost: Number(product.costPrice || 0),
+        price: linePrice,
+        cost: lineCost,
         stock: currentStock,
-        qty: 1
+        qty: 1,
+        saleUnit: saleUnit,
+        unitsPerPack: product.unitsPerPack || 1,
+        unitMultiplier: unitMultiplier,
+        packUnitLabel: product.packUnitLabel || 'pack',
+        packPrice: product.packPrice || null
       });
     }
 
@@ -729,28 +864,77 @@
     playScannerBeep();
   };
 
-  window.changeCartQty = (productId, delta) => {
-    const item = posCart.find(i => String(i.id) === String(productId));
+  window.changeCartQty = (productId, delta, saleUnit = 'unit') => {
+    const item = posCart.find(i => String(i.id) === String(productId) && (i.saleUnit || 'unit') === saleUnit);
     if (!item) return;
 
     const product = productMap.get(productId) || productMap.get(Number(productId)) || productMap.get(String(productId)) || posProducts.find(p => String(p.id) === String(productId));
     const maxStock = product ? Number(product.currentStock != null ? product.currentStock : product.stock) : (item.stock != null ? item.stock : 99);
+    const multiplier = item.unitMultiplier || 1;
 
-    if (delta > 0 && item.qty + delta > maxStock) {
-      showToast(`Stock disponible dépassé (${maxStock} unités max).`, 'error');
-      return;
+    if (delta > 0) {
+      const totalUnitsInCart = posCart
+        .filter(i => String(i.id) === String(productId))
+        .reduce((sum, i) => sum + (i.qty * (i.unitMultiplier || 1)), 0);
+
+      if (totalUnitsInCart + (delta * multiplier) > maxStock) {
+        showToast(`Stock disponible dépassé (${maxStock} unités max).`, 'error');
+        return;
+      }
     }
 
     item.qty += delta;
     lastScannedItemId = productId;
     if (item.qty <= 0) {
-      posCart = posCart.filter(i => String(i.id) !== String(productId));
+      posCart = posCart.filter(i => !(String(i.id) === String(productId) && (i.saleUnit || 'unit') === saleUnit));
     }
     renderPosCart();
   };
 
-  window.removeFromPosCart = (productId) => {
-    posCart = posCart.filter(i => String(i.id) !== String(productId));
+  window.removeFromPosCart = (productId, saleUnit = 'unit') => {
+    posCart = posCart.filter(i => !(String(i.id) === String(productId) && (i.saleUnit || 'unit') === saleUnit));
+    renderPosCart();
+  };
+
+  window.toggleCartItemUnit = (productId, currentUnit) => {
+    const itemIndex = posCart.findIndex(i => String(i.id) === String(productId) && (i.saleUnit || 'unit') === currentUnit);
+    if (itemIndex === -1) return;
+
+    const item = posCart[itemIndex];
+    const product = productMap.get(productId) || productMap.get(Number(productId)) || productMap.get(String(productId)) || posProducts.find(p => String(p.id) === String(productId));
+    if (!product || !product.unitsPerPack || product.unitsPerPack <= 1) return;
+
+    const newUnit = (currentUnit === 'pack') ? 'unit' : 'pack';
+    const newMultiplier = (newUnit === 'pack') ? Number(product.unitsPerPack) : 1;
+    const baseSellingPrice = Number(product.sellingPrice || product.price || 0);
+    const newPrice = (newUnit === 'pack')
+      ? Number(product.packPrice || (baseSellingPrice * newMultiplier))
+      : baseSellingPrice;
+    const newCost = Number(product.costPrice || 0) * newMultiplier;
+    const maxStock = Number(product.currentStock != null ? product.currentStock : 99);
+
+    // Compute total units in cart for this product if we toggle this item
+    const otherUnitsInCart = posCart
+      .filter((_, idx) => idx !== itemIndex && String(posCart[idx].id) === String(productId))
+      .reduce((sum, i) => sum + (i.qty * (i.unitMultiplier || 1)), 0);
+
+    if (otherUnitsInCart + (item.qty * newMultiplier) > maxStock) {
+      showToast(`Stock insuffisant pour basculer en ${newUnit} (${maxStock} unités max).`, 'error');
+      return;
+    }
+
+    // Check if an item with newUnit already exists in cart -> merge
+    const existingSameUnit = posCart.find((i, idx) => idx !== itemIndex && String(i.id) === String(productId) && (i.saleUnit || 'unit') === newUnit);
+    if (existingSameUnit) {
+      existingSameUnit.qty += item.qty;
+      posCart.splice(itemIndex, 1);
+    } else {
+      item.saleUnit = newUnit;
+      item.unitMultiplier = newMultiplier;
+      item.price = newPrice;
+      item.cost = newCost;
+    }
+
     renderPosCart();
   };
 
@@ -843,13 +1027,23 @@
 
     container.innerHTML = posCart.map(item => {
       const safeId = escapeHtml(String(item.id));
+      const itemUnit = escapeHtml(item.saleUnit || 'unit');
       const isJustAdded = String(item.id) === String(lastScannedItemId);
       const lineTotal = (item.price * item.qty).toFixed(2);
+      const isPack = item.saleUnit === 'pack';
+      const hasPackOption = item.unitsPerPack && item.unitsPerPack > 1;
 
       return `
       <div class="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/70 dark:border-slate-700/60 flex items-center justify-between gap-2.5 transition ${isJustAdded ? 'pos-scan-highlight' : ''}">
         <div class="flex flex-col min-w-0 flex-1">
-          <span class="font-bold text-slate-800 dark:text-slate-100 text-xs truncate">${escapeHtml(item.name)}</span>
+          <div class="flex items-center gap-1.5">
+            <span class="font-bold text-slate-800 dark:text-slate-100 text-xs truncate">${escapeHtml(item.name)}</span>
+            ${hasPackOption ? `
+              <button onclick="window.toggleCartItemUnit('${safeId}', '${itemUnit}')" class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase transition shrink-0 ${isPack ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 hover:bg-purple-200' : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 hover:bg-slate-300'}" title="Cliquer pour basculer Unité / Pack">
+                ${isPack ? `📦 ${escapeHtml(item.packUnitLabel || 'Pack')} (×${item.unitsPerPack})` : '🏷️ Unité'} ⇄
+              </button>
+            ` : ''}
+          </div>
           <div class="flex items-center gap-2 mt-0.5 text-[11px] font-mono text-slate-500 dark:text-slate-400 tabular-nums">
             <span>${item.price.toFixed(2)} DA</span>
             <span>×</span>
@@ -861,11 +1055,11 @@
 
         <div class="flex items-center gap-1.5 shrink-0">
           <div class="flex items-center border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-            <button onclick="changeCartQty('${safeId}', -1)" class="w-8 h-8 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-extrabold text-sm active:scale-95 transition" title="Diminuer">-</button>
+            <button onclick="changeCartQty('${safeId}', -1, '${itemUnit}')" class="w-8 h-8 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-extrabold text-sm active:scale-95 transition" title="Diminuer">-</button>
             <span class="px-2 text-xs font-mono font-black text-slate-900 dark:text-slate-100 tabular-nums">${item.qty}</span>
-            <button onclick="changeCartQty('${safeId}', 1)" class="w-8 h-8 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-extrabold text-sm active:scale-95 transition" title="Augmenter">+</button>
+            <button onclick="changeCartQty('${safeId}', 1, '${itemUnit}')" class="w-8 h-8 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-extrabold text-sm active:scale-95 transition" title="Augmenter">+</button>
           </div>
-          <button onclick="removeFromPosCart('${safeId}')" class="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-bold transition" title="Supprimer l'article">✕</button>
+          <button onclick="removeFromPosCart('${safeId}', '${itemUnit}')" class="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-bold transition" title="Supprimer l'article">✕</button>
         </div>
       </div>
     `;
@@ -2207,7 +2401,9 @@
     dismissChangeHUD: dismissChangeDueHUD,
     kickCashDrawer: kickPosCashDrawer,
     syncCategoriesUI: syncCategoriesUI,
-    openCategoryManagerModal: openCategoryManagerModal
+    openCategoryManagerModal: openCategoryManagerModal,
+    updateExpiryBadge: updateExpiryBadge,
+    updateSyncBadge: updateSyncBadge
   };
 
   window.loadPosProducts = loadPosProducts;

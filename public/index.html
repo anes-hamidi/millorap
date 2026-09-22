@@ -125,6 +125,15 @@
           <span class="nav-compact-label">Dettes</span>
           <span id="nav-debts-badge" class="nav-badge-pill hidden text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700">0 DA</span>
         </button>
+
+        <button id="nav-suppliers" data-workspace="suppliers" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Fournisseurs & Commandes (Task 5)">
+          <div class="flex items-center gap-2.5">
+            <span class="nav-icon text-base">🏭</span>
+            <span class="sidebar-expanded-only">Fournisseurs & BC</span>
+          </div>
+          <span class="nav-compact-label">Fourn.</span>
+          <span id="nav-suppliers-badge" class="nav-badge-pill hidden text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">0</span>
+        </button>
       </div>
 
       <!-- Group 3: Document & Printing -->
@@ -214,6 +223,17 @@
         <!-- Right: Status Chips, Clock & Theme Toggle -->
         <div class="flex items-center gap-2.5 shrink-0">
           
+          <!-- Dexie Cloud Sync Status Pill (Task 1) -->
+          <div id="sync-status-badge" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700" title="Dexie Cloud Multi-Register Sync Status">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            <span>Cloud Sync</span>
+          </div>
+
+          <!-- Expiry Alert Pill (Task 3) -->
+          <button id="expiry-alert-badge" onclick="switchAppMode('analytics')" class="hidden px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-1.5" title="Articles proches de la date de péremption">
+            <span>⏳</span> <span>0 Péremption</span>
+          </button>
+
           <!-- Low Stock Alert Pill -->
           <button id="low-stock-alert-badge" onclick="switchAppMode('inventory')" class="hidden px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-1.5 animate-pulse" title="Click to view low stock inventory">
             <span>⚠️</span> <span>0 Low Stock</span>
@@ -1227,8 +1247,8 @@
         </div>
       </div>
 
-      <!-- Two-Column Grid: Top Sellers & Low Stock Alerts -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Three-Column Grid: Top Sellers, Low Stock Alerts & Expiring Batches -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         
         <!-- Top Sellers Leaderboard -->
         <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-3">
@@ -1244,12 +1264,25 @@
         <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-3">
           <div class="flex items-center justify-between">
             <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
-              <span>⚠️</span> <span>Low Stock & Depletion Warnings</span>
+              <span>⚠️</span> <span>Low Stock Warnings</span>
             </h3>
-            <button onclick="switchAppMode('inventory')" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold">Manage Stock ↗</button>
+            <button onclick="switchAppMode('inventory')" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold">Stock ↗</button>
           </div>
           <div id="page-analytics-low-stock" class="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
             <span class="text-slate-400 text-xs text-center py-6">All stock levels are optimal.</span>
+          </div>
+        </div>
+
+        <!-- Expiring Batches Alerts (Task 3) -->
+        <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <span>⏳</span> <span>Lots Périssables (D-7 / D-3)</span>
+            </h3>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300">Batches</span>
+          </div>
+          <div id="page-analytics-expiring-batches" class="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
+            <span class="text-slate-400 text-xs text-center py-6">Aucun lot proche de la péremption.</span>
           </div>
         </div>
 
@@ -1602,6 +1635,16 @@
               </div>
             </div>
 
+            <!-- Multi-Register Terminal ID (Task 1) -->
+            <div>
+              <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Identifiant de Caisse / Terminal ID</label>
+              <div class="flex items-center gap-2">
+                <input type="text" id="settings-terminal-id-input" placeholder="T1" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-xs text-indigo-600 dark:text-indigo-400 font-bold uppercase">
+                <button type="button" id="settings-save-terminal-btn" class="px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold whitespace-nowrap hover:bg-indigo-100 text-xs">💾 Enregistrer</button>
+              </div>
+              <p class="text-[10px] text-slate-400 mt-1">Identifiant unique de cette station (ex: T1, T2). Préfixe les tickets (DZ-T1-...).</p>
+            </div>
+
             <div>
               <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Mobile QR Host Address (Wi-Fi / LAN)</label>
               <div class="flex items-center gap-2">
@@ -1733,6 +1776,117 @@
 
     </div>
     <!-- END SECTION 9: Customer Debts -->
+
+    <!-- SECTION 10: Suppliers & Purchase Orders Workspace (Task 5) -->
+    <div id="section-suppliers-app" class="workspace-section hidden flex flex-col gap-6">
+
+      <!-- Top KPI Summary Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-4 bg-white/70 dark:bg-slate-900/70">
+          <div class="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-2xl shrink-0">🏭</div>
+          <div class="flex flex-col min-w-0">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Fournisseurs Actifs</span>
+            <span id="suppliers-kpi-count" class="text-2xl font-black text-slate-800 dark:text-slate-100 font-mono mt-0.5">0</span>
+            <span class="text-[10px] text-slate-400">Partenaires enregistrés</span>
+          </div>
+        </div>
+
+        <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-4 bg-white/70 dark:bg-slate-900/70">
+          <div class="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 flex items-center justify-center text-2xl shrink-0">📦</div>
+          <div class="flex flex-col min-w-0">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Commandes en Cours</span>
+            <span id="suppliers-kpi-pending-po" class="text-2xl font-black text-amber-600 dark:text-amber-400 font-mono mt-0.5">0</span>
+            <span class="text-[10px] text-slate-400">Bons de commande en attente</span>
+          </div>
+        </div>
+
+        <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-4 bg-white/70 dark:bg-slate-900/70">
+          <div class="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-2xl shrink-0">🚚</div>
+          <div class="flex flex-col min-w-0">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Commandes</span>
+            <span id="suppliers-kpi-total-orders" class="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">0</span>
+            <span class="text-[10px] text-slate-400">Historique complet</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls & Sub-tabs Header -->
+      <div class="glass-panel p-4 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <button id="suppliers-tab-btn-orders" onclick="switchSuppliersSubTab('orders')" class="px-4 py-2 rounded-xl text-xs font-bold transition bg-indigo-600 text-white shadow-sm">
+            📦 Bons de Commande (PO)
+          </button>
+          <button id="suppliers-tab-btn-list" onclick="switchSuppliersSubTab('suppliers')" class="px-4 py-2 rounded-xl text-xs font-bold transition bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200">
+            🏭 Répertoire Fournisseurs
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap ml-auto">
+          <button onclick="openSupplierModal()" class="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-50 transition flex items-center gap-1.5 shadow-sm">
+            <span>➕</span> <span>Ajouter Fournisseur</span>
+          </button>
+          <button onclick="openPurchaseOrderModal()" class="btn-gradient text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5">
+            <span>📦</span> <span>Créer Bon de Commande</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Sub-view 1: Purchase Orders Table -->
+      <div id="suppliers-subview-orders" class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+            <span>📦</span> <span>Historique des Bons de Commande</span>
+          </h3>
+          <span class="text-xs text-slate-400 font-mono" id="po-count-label">0 commande(s)</span>
+        </div>
+        <div class="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-900/60">
+          <table class="w-full text-xs text-left">
+            <thead class="bg-slate-50 dark:bg-slate-800/80 text-slate-400 text-[10px] uppercase font-bold tracking-wider border-b border-slate-200 dark:border-slate-800">
+              <tr>
+                <th class="p-3.5">N° Commande</th>
+                <th class="p-3.5">Fournisseur</th>
+                <th class="p-3.5">Date</th>
+                <th class="p-3.5 text-center">Articles</th>
+                <th class="p-3.5 text-right">Montant Estimé</th>
+                <th class="p-3.5 text-center">Statut</th>
+                <th class="p-3.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="purchase-orders-table-body" class="divide-y divide-slate-100 dark:divide-slate-800/80">
+              <tr><td colspan="7" class="p-8 text-center text-slate-400 text-xs">Aucun bon de commande enregistré.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Sub-view 2: Suppliers List Table (Hidden by default) -->
+      <div id="suppliers-subview-list" class="hidden glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+            <span>🏭</span> <span>Liste des Fournisseurs</span>
+          </h3>
+          <span class="text-xs text-slate-400 font-mono" id="suppliers-count-label">0 fournisseur(s)</span>
+        </div>
+        <div class="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-900/60">
+          <table class="w-full text-xs text-left">
+            <thead class="bg-slate-50 dark:bg-slate-800/80 text-slate-400 text-[10px] uppercase font-bold tracking-wider border-b border-slate-200 dark:border-slate-800">
+              <tr>
+                <th class="p-3.5">Fournisseur</th>
+                <th class="p-3.5">Téléphone</th>
+                <th class="p-3.5 text-center">Commandes Totales</th>
+                <th class="p-3.5 text-center">En Attente</th>
+                <th class="p-3.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="suppliers-table-body" class="divide-y divide-slate-100 dark:divide-slate-800/80">
+              <tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Chargement des fournisseurs...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+    <!-- END SECTION 10: Suppliers & Purchase Orders -->
 
   </main>
   </div> <!-- End APP MAIN CONTENT WRAPPER -->
@@ -2511,6 +2665,31 @@
           </div>
         </div>
 
+        <!-- Unit vs Pack Selling Fields (Task 2) -->
+        <div class="p-3 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-2xl border border-indigo-200/60 dark:border-indigo-800/50 flex flex-col gap-2.5">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-indigo-700 dark:text-indigo-300 text-xs">Vente par Pack / Fardeau / Carton</span>
+            <label class="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400 cursor-pointer">
+              <input type="checkbox" id="product-form-pack-default" class="rounded text-indigo-600 w-3.5 h-3.5">
+              <span>Pack par défaut</span>
+            </label>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1 text-[11px]">Unités / Pack</label>
+              <input type="number" id="product-form-units-per-pack" min="1" value="1" placeholder="1" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none font-bold text-xs">
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1 text-[11px]">Libellé Pack</label>
+              <input type="text" id="product-form-pack-label" placeholder="ex: fardeau, carton" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none text-xs">
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1 text-[11px]">Prix Pack (DA)</label>
+              <input type="number" id="product-form-pack-price" min="0" step="1" placeholder="Optionnel" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none text-xs font-bold" title="Si vide, calcul automatique = Prix unitaire × Unités">
+            </div>
+          </div>
+        </div>
+
 
         <div class="flex items-center justify-between border-t border-slate-200/60 dark:border-slate-800 pt-3 mt-1">
           <button type="button" id="delete-product-btn" class="hidden text-rose-500 hover:underline font-bold">Delete Item</button>
@@ -2673,6 +2852,101 @@
     </div>
   </div>
 
+  <!-- MODAL: Add / Edit Supplier (Task 5) -->
+  <div id="supplier-form-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl flex flex-col gap-4">
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <h3 id="supplier-modal-title" class="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <span>🏭</span> Ajouter un Fournisseur
+        </h3>
+        <button onclick="document.getElementById('supplier-form-modal')?.classList.add('hidden')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">✕</button>
+      </div>
+      <form id="supplier-form" onsubmit="handleSupplierSubmit(event)" class="flex flex-col gap-3 text-xs">
+        <input type="hidden" id="supplier-form-id">
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Nom du Fournisseur / Société *</label>
+          <input type="text" id="supplier-form-name" required placeholder="ex: Sarl Alger Papeterie" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none font-bold">
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Téléphone / Contact</label>
+          <input type="tel" id="supplier-form-phone" placeholder="ex: 0550 12 34 56" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none">
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-800">
+          <button type="button" onclick="document.getElementById('supplier-form-modal')?.classList.add('hidden')" class="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-200 text-xs">Annuler</button>
+          <button type="submit" class="btn-gradient text-white px-5 py-2 rounded-xl font-bold shadow-md">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Create Purchase Order (Task 5) -->
+  <div id="po-form-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-xl w-full shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <h3 class="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <span>📦</span> Nouveau Bon de Commande
+        </h3>
+        <button onclick="document.getElementById('po-form-modal')?.classList.add('hidden')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">✕</button>
+      </div>
+      <form id="po-form" onsubmit="handlePurchaseOrderSubmit(event)" class="flex flex-col gap-4 text-xs">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Fournisseur *</label>
+            <select id="po-form-supplier" required class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none font-bold">
+              <option value="">Sélectionner un fournisseur...</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Date Prévue de Réception</label>
+            <input type="date" id="po-form-date" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none">
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-slate-700 dark:text-slate-300">Articles à Commander</span>
+            <button type="button" onclick="addPoItemRow()" class="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold text-xs hover:bg-indigo-100 transition flex items-center gap-1">
+              <span>➕</span> Ajouter Article
+            </button>
+          </div>
+          <div id="po-form-items-container" class="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1"></div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-200/60 dark:border-slate-800">
+          <button type="button" onclick="document.getElementById('po-form-modal')?.classList.add('hidden')" class="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-200 text-xs">Annuler</button>
+          <button type="submit" class="btn-gradient text-white px-5 py-2 rounded-xl font-bold shadow-md">Créer le Bon de Commande</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Receive Delivery against PO (Task 5) -->
+  <div id="po-receive-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-xl w-full shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <div>
+          <h3 class="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+            <span>🚚</span> Réception de Livraison (Delivery Note)
+          </h3>
+          <p id="po-receive-subtitle" class="text-[11px] text-slate-400 font-mono">BC #DZ-PO-001</p>
+        </div>
+        <button onclick="document.getElementById('po-receive-modal')?.classList.add('hidden')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">✕</button>
+      </div>
+
+      <form id="po-receive-form" onsubmit="handleReceiveDeliverySubmit(event)" class="flex flex-col gap-4 text-xs">
+        <input type="hidden" id="po-receive-id">
+        <div id="po-receive-items-container" class="flex flex-col gap-2.5 max-h-64 overflow-y-auto pr-1"></div>
+        <p class="text-[11px] text-slate-400">
+          💡 La validation incrémentera automatiquement le stock en magasin et créera un journal d'audit <strong>RESTOCK</strong>. Si une date de péremption est renseignée, elle créera un lot dans la table <strong>batches</strong>.
+        </p>
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-200/60 dark:border-slate-800">
+          <button type="button" onclick="document.getElementById('po-receive-modal')?.classList.add('hidden')" class="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-200 text-xs">Annuler</button>
+          <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-xl font-bold shadow-md transition">Valider la Réception & Stocker</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Core Vendor Libraries (Deferred to unblock initial paint) -->
   <script src="js/dexie.min.js"></script>
   <script>
@@ -2701,17 +2975,18 @@
     };
   </script>
 
-  <!-- Application Modular Scripts (Cache-Busted v=2.9) -->
-  <script src="js/db.js?v=2.9"></script>
-  <script src="js/checkoutService.js?v=2.9"></script>
-  <script src="js/debtService.js?v=2.9"></script>
-  <script src="js/analyticsService.js?v=2.9"></script>
-  <script src="js/backupService.js?v=2.9"></script>
-  <script src="js/qr-generator.js?v=2.9"></script>
-  <script src="js/file-browser.js?v=2.9"></script>
-  <script src="js/printing.js?v=2.9"></script>
-  <script src="js/pos.js?v=2.9"></script>
-  <script src="js/app.js?v=2.9"></script>
+  <!-- Application Modular Scripts (Cache-Busted v=3.0) -->
+  <script src="js/db.js?v=3.0"></script>
+  <script src="js/checkoutService.js?v=3.0"></script>
+  <script src="js/debtService.js?v=3.0"></script>
+  <script src="js/supplierService.js?v=3.0"></script>
+  <script src="js/analyticsService.js?v=3.0"></script>
+  <script src="js/backupService.js?v=3.0"></script>
+  <script src="js/qr-generator.js?v=3.0"></script>
+  <script src="js/file-browser.js?v=3.0"></script>
+  <script src="js/printing.js?v=3.0"></script>
+  <script src="js/pos.js?v=3.0"></script>
+  <script src="js/app.js?v=3.0"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

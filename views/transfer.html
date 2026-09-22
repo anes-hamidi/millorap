@@ -179,14 +179,17 @@
       document.getElementById('upload-screen').classList.add('hidden');
       document.getElementById('progress-screen').classList.remove('hidden');
 
+      const sessionToken = '{{TOKEN}}' || new URLSearchParams(window.location.search).get('token') || '';
       const formData = new FormData();
       formData.append('sessionId', sessionId);
+      formData.append('token', sessionToken);
       fileQueue.forEach(f => {
         formData.append('files', f, f.name);
       });
 
       const xhr = new XMLHttpRequest();
       xhr.open('POST', '/api/transfer/upload', true);
+      xhr.setRequestHeader('X-Session-Token', sessionToken);
 
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) {

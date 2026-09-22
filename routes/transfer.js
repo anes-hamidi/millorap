@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const multer = require('multer');
 
 const router = express.Router();
@@ -11,8 +12,9 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
-// In-memory transfer sessions tracking
-const transferSessions = new Map(); // sessionId -> { files: [], connected: boolean, lastUpdated }
+// In-memory transfer sessions tracking: sessionId -> { token, expiresAt, files: [], lastUpdated }
+const transferSessions = new Map();
+const SESSION_TTL_MS = 15 * 60 * 1000; // 15 minutes TTL
 
 // Multer storage engine saving directly to unique 'uploads' directory
 const storage = multer.diskStorage({
@@ -42,24 +44,77 @@ const upload = multer({
 
 const TRANSFER_TEMPLATE_PATH = path.join(__dirname, '..', 'views', 'transfer.html');
 
-// GET /transfer?session=TR-XXXXXX (Page opened by scanning QR with Mobile Phone)
+// Helper to generate or register a session token
+function getOrCreateSession(sessionId, existingToken = null) {
+  const now = Date.now();
+  let session = transferSessions.get(sessionId);
+  if (!session) {
+    const token = existingToken || crypto.randomBytes(16).toString('hex');
+    session = {
+      token,
+      expiresAt: now + SESSION_TTL_MS,
+      files: [],
+      lastUpdated: now
+    };
+    transferSessions.set(sessionId, session);
+  } else if (existingToken && session.token !== existingToken) {
+    session.token = existingToken;
+    session.expiresAt = now + SESSION_TTL_MS;
+  }
+  return session;
+}
+
+// GET /transfer?session=TR-XXXXXX&token=YYYYYY (Page opened by scanning QR with Mobile Phone)
 router.get('/transfer', (req, res) => {
   const sessionId = req.query.session || ('TR-' + Date.now().toString().slice(-6));
+  const token = req.query.token || crypto.randomBytes(16).toString('hex');
   const store = req.query.store || 'Millora Print & POS';
+
+  // Register session with 15-minute expiration
+  getOrCreateSession(sessionId, token);
 
   try {
     let html = fs.readFileSync(TRANSFER_TEMPLATE_PATH, 'utf8');
     html = html.replace(/{{STORE}}/g, store)
-               .replace(/{{SESSION_ID}}/g, sessionId);
+               .replace(/{{SESSION_ID}}/g, sessionId)
+               .replace(/{{TOKEN}}/g, token);
     res.send(html);
   } catch (err) {
     res.status(500).send('Erreur lors du chargement de la page de transfert: ' + err.message);
   }
 });
 
-// POST /api/transfer/upload (Receives files from mobile phone)
+// POST /api/transfer/upload (Receives files from mobile phone - REQUIRES VALID SESSION TOKEN)
 router.post('/transfer/upload', upload.array('files'), (req, res) => {
-  const sessionId = req.body.sessionId || 'default';
+  const sessionId = req.body.sessionId || req.query.session || 'default';
+  const providedToken = req.body.token || req.headers['x-session-token'] || req.query.token;
+
+  const session = transferSessions.get(sessionId);
+  const now = Date.now();
+
+  // Validate session presence, token match, and TTL expiration
+  if (!session || !session.token) {
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized: Transfer session not found or expired'
+    });
+  }
+
+  if (!providedToken || providedToken !== session.token) {
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized: Invalid session security token'
+    });
+  }
+
+  if (session.expiresAt && now > session.expiresAt) {
+    transferSessions.delete(sessionId);
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized: Transfer session has expired (15m limit)'
+    });
+  }
+
   const uploadedFiles = (req.files || []).map(f => ({
     name: f.filename,
     originalName: Buffer.from(f.originalname, 'latin1').toString('utf8'),
@@ -71,13 +126,8 @@ router.post('/transfer/upload', upload.array('files'), (req, res) => {
     timestamp: new Date().toISOString()
   }));
 
-  if (!transferSessions.has(sessionId)) {
-    transferSessions.set(sessionId, { files: [], lastUpdated: Date.now() });
-  }
-
-  const session = transferSessions.get(sessionId);
   session.files.push(...uploadedFiles);
-  session.lastUpdated = Date.now();
+  session.lastUpdated = now;
 
   res.json({
     success: true,
@@ -94,9 +144,16 @@ router.get('/transfer/status/:sessionId', (req, res) => {
     const files = [...session.files];
     // Clear reported files so they aren't processed twice
     session.files = [];
-    return res.json({ success: true, hasFiles: true, files });
+    return res.json({ success: true, hasFiles: true, files, token: session.token });
   }
-  return res.json({ success: true, hasFiles: false, files: [] });
+  return res.json({ success: true, hasFiles: false, files: [], token: session ? session.token : null });
+});
+
+// GET /api/transfer/token/:sessionId (Generates / retrieves secure session token for QR generation)
+router.get('/transfer/token/:sessionId', (req, res) => {
+  const { sessionId } = req.params;
+  const session = getOrCreateSession(sessionId);
+  res.json({ success: true, sessionId, token: session.token, expiresAt: session.expiresAt });
 });
 
 // GET /api/transfer/files (Lists all files currently in the uploads directory)
@@ -185,3 +242,4 @@ router.post('/transfer/clear', (req, res) => {
 
 module.exports = router;
 module.exports.UPLOADS_DIR = UPLOADS_DIR;
+module.exports.getOrCreateSession = getOrCreateSession;

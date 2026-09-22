@@ -249,6 +249,8 @@
       }
     });
 
+    const token = '{{TOKEN}}' || new URLSearchParams(window.location.search).get('token') || '';
+
     async function handleCibSubmit(e) {
       e.preventDefault();
       const cardNum = document.getElementById('card-num').value.replace(/\s/g, '');
@@ -258,13 +260,17 @@
       document.getElementById('payment-flow').classList.add('hidden');
       document.getElementById('processing-screen').classList.remove('hidden');
 
-      // Call payment verification API
+      // Call payment verification API with session token
       try {
         const res = await fetch('/api/pay/process', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-Session-Token': token
+          },
           body: JSON.stringify({
             orderId: orderId,
+            token: token,
             amount: amount,
             method: 'CIB / Edahabia (SATIM)',
             cardLast4: cardNum.slice(-4),
@@ -290,9 +296,13 @@
       try {
         await fetch('/api/pay/process', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-Session-Token': token
+          },
           body: JSON.stringify({
             orderId: orderId,
+            token: token,
             amount: amount,
             method: methodName
           })

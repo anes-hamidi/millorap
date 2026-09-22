@@ -1,6 +1,6 @@
-// ==========================================
+// ==============================================================================
 // CLIENT-SIDE DATA BACKUP & RECOVERY SERVICE (JSON / CSV)
-// ==========================================
+// ==============================================================================
 (function() {
   const BACKUP_REMINDER_KEY = 'pos_last_backup_time';
   const REMINDER_INTERVAL_DAYS = 7;
@@ -28,7 +28,11 @@
     }
     const db = window.FlexiDB.db;
 
-    const [products, sales, saleItems, stockLogs, customers, debts, debtPayments, categories] = await Promise.all([
+    const [
+      products, sales, saleItems, stockLogs,
+      customers, debts, debtPayments, categories,
+      batches, suppliers, purchaseOrders, purchaseOrderItems
+    ] = await Promise.all([
       db.products.toArray(),
       db.sales.toArray(),
       db.saleItems.toArray(),
@@ -36,13 +40,18 @@
       db.customers ? db.customers.toArray().catch(() => []) : Promise.resolve([]),
       db.debts ? db.debts.toArray().catch(() => []) : Promise.resolve([]),
       db.debtPayments ? db.debtPayments.toArray().catch(() => []) : Promise.resolve([]),
-      db.categories ? db.categories.toArray().catch(() => []) : Promise.resolve([])
+      db.categories ? db.categories.toArray().catch(() => []) : Promise.resolve([]),
+      db.batches ? db.batches.toArray().catch(() => []) : Promise.resolve([]),
+      db.suppliers ? db.suppliers.toArray().catch(() => []) : Promise.resolve([]),
+      db.purchaseOrders ? db.purchaseOrders.toArray().catch(() => []) : Promise.resolve([]),
+      db.purchaseOrderItems ? db.purchaseOrderItems.toArray().catch(() => []) : Promise.resolve([])
     ]);
 
     const backupData = {
       app: 'FlexiPOS',
       version: 3,
       exportedAt: new Date().toISOString(),
+      terminalId: localStorage.getItem('pos_terminal_id') || 'T1',
       counts: {
         products: products.length,
         sales: sales.length,
@@ -51,7 +60,11 @@
         customers: (customers || []).length,
         debts: (debts || []).length,
         debtPayments: (debtPayments || []).length,
-        categories: (categories || []).length
+        categories: (categories || []).length,
+        batches: (batches || []).length,
+        suppliers: (suppliers || []).length,
+        purchaseOrders: (purchaseOrders || []).length,
+        purchaseOrderItems: (purchaseOrderItems || []).length
       },
       data: {
         products,
@@ -61,7 +74,11 @@
         customers: customers || [],
         debts: debts || [],
         debtPayments: debtPayments || [],
-        categories: categories || []
+        categories: categories || [],
+        batches: batches || [],
+        suppliers: suppliers || [],
+        purchaseOrders: purchaseOrders || [],
+        purchaseOrderItems: purchaseOrderItems || []
       }
     };
 
@@ -111,6 +128,10 @@
     if (db.debts) storesToLock.push(db.debts);
     if (db.debtPayments) storesToLock.push(db.debtPayments);
     if (db.categories) storesToLock.push(db.categories);
+    if (db.batches) storesToLock.push(db.batches);
+    if (db.suppliers) storesToLock.push(db.suppliers);
+    if (db.purchaseOrders) storesToLock.push(db.purchaseOrders);
+    if (db.purchaseOrderItems) storesToLock.push(db.purchaseOrderItems);
 
     // Atomic transaction replacing database records
     return await db.transaction('rw', storesToLock, async () => {
@@ -125,6 +146,10 @@
       if (db.debts) clearPromises.push(db.debts.clear());
       if (db.debtPayments) clearPromises.push(db.debtPayments.clear());
       if (db.categories) clearPromises.push(db.categories.clear());
+      if (db.batches) clearPromises.push(db.batches.clear());
+      if (db.suppliers) clearPromises.push(db.suppliers.clear());
+      if (db.purchaseOrders) clearPromises.push(db.purchaseOrders.clear());
+      if (db.purchaseOrderItems) clearPromises.push(db.purchaseOrderItems.clear());
       await Promise.all(clearPromises);
 
       // Bulk add restored data
@@ -152,6 +177,18 @@
       if (db.categories && json.data.categories && json.data.categories.length > 0) {
         await db.categories.bulkAdd(json.data.categories);
       }
+      if (db.batches && json.data.batches && json.data.batches.length > 0) {
+        await db.batches.bulkAdd(json.data.batches);
+      }
+      if (db.suppliers && json.data.suppliers && json.data.suppliers.length > 0) {
+        await db.suppliers.bulkAdd(json.data.suppliers);
+      }
+      if (db.purchaseOrders && json.data.purchaseOrders && json.data.purchaseOrders.length > 0) {
+        await db.purchaseOrders.bulkAdd(json.data.purchaseOrders);
+      }
+      if (db.purchaseOrderItems && json.data.purchaseOrderItems && json.data.purchaseOrderItems.length > 0) {
+        await db.purchaseOrderItems.bulkAdd(json.data.purchaseOrderItems);
+      }
 
       markBackupCompleted();
       return {
@@ -164,7 +201,11 @@
           customers: (json.data.customers || []).length,
           debts: (json.data.debts || []).length,
           debtPayments: (json.data.debtPayments || []).length,
-          categories: (json.data.categories || []).length
+          categories: (json.data.categories || []).length,
+          batches: (json.data.batches || []).length,
+          suppliers: (json.data.suppliers || []).length,
+          purchaseOrders: (json.data.purchaseOrders || []).length,
+          purchaseOrderItems: (json.data.purchaseOrderItems || []).length
         }
       };
     });
@@ -177,7 +218,7 @@
     if (!window.FlexiDB || !window.FlexiDB.db) throw new Error('Database not ready');
     const products = await window.FlexiDB.db.products.toArray();
 
-    const headers = ['ID', 'Barcode', 'Name', 'Category', 'Cost Price (DA)', 'Selling Price (DA)', 'Current Stock', 'Low Stock Threshold', 'Total Inventory Value (DA)'];
+    const headers = ['ID', 'Barcode', 'Name', 'Category', 'Cost Price (DA)', 'Selling Price (DA)', 'Units Per Pack', 'Pack Unit', 'Pack Price (DA)', 'Current Stock', 'Low Stock Threshold', 'Total Inventory Value (DA)'];
     const rows = products.map(p => {
       const cost = Number(p.costPrice) || 0;
       const stock = Number(p.currentStock) || 0;
@@ -189,6 +230,9 @@
         '"' + (p.category || '').replace(/"/g, '""') + '"',
         cost.toFixed(2),
         (Number(p.sellingPrice) || 0).toFixed(2),
+        p.unitsPerPack || 1,
+        '"' + (p.packUnitLabel || '').replace(/"/g, '""') + '"',
+        p.packPrice != null ? Number(p.packPrice).toFixed(2) : '',
         stock,
         p.lowStockThreshold || 10,
         totalVal.toFixed(2)
@@ -206,11 +250,12 @@
     if (!window.FlexiDB || !window.FlexiDB.db) throw new Error('Database not ready');
     const sales = await window.FlexiDB.db.sales.toArray();
 
-    const headers = ['Sale ID', 'Order Reference', 'Date', 'Time', 'Payment Method', 'Item Count', 'Subtotal (DA)', 'Discount (DA)', 'Total Amount (DA)', 'Total Cost (DA)', 'Net Profit (DA)'];
+    const headers = ['Sale ID', 'Terminal', 'Order Reference', 'Date', 'Time', 'Payment Method', 'Item Count', 'Subtotal (DA)', 'Discount (DA)', 'Total Amount (DA)', 'Total Cost (DA)', 'Net Profit (DA)'];
     const rows = sales.map(s => {
       const d = new Date(s.timestamp);
       return [
         s.id,
+        s.terminalId || 'T1',
         '"' + (s.orderRef || '') + '"',
         d.toLocaleDateString(),
         d.toLocaleTimeString(),

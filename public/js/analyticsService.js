@@ -1,6 +1,6 @@
-// ==========================================
-// CLIENT-SIDE ANALYTICS SERVICE (LOCAL AGGREGATIONS)
-// ==========================================
+// ==============================================================================
+// CLIENT-SIDE ANALYTICS SERVICE (LOCAL AGGREGATIONS & EXPIRY BATCH TRACKING)
+// ==============================================================================
 (function() {
   /**
    * Fetch Low Stock Alert items ordered by severity.
@@ -22,6 +22,77 @@
       if (b.currentStock <= 0 && a.currentStock > 0) return 1;
       return a.currentStock - b.currentStock;
     });
+  }
+
+  /**
+   * Fetch Expiring Batches within `daysAhead` days (Task 3).
+   * Filters db.batches for quantity > 0 and expiryDate <= targetDate.
+   * Ordered soonest-first and enriched with product metadata.
+   *
+   * @param {number} daysAhead - Alert window in days (default: 7 days)
+   * @returns {Promise<Array>}
+   */
+  async function getExpiringBatches(daysAhead = 7) {
+    if (!window.FlexiDB || !window.FlexiDB.db || !window.FlexiDB.db.batches) return [];
+    const db = window.FlexiDB.db;
+
+    try {
+      const allBatches = await db.batches.toArray();
+      if (!allBatches || allBatches.length === 0) return [];
+
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const targetDate = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+      targetDate.setHours(23, 59, 59, 999);
+
+      // Filter active batches with positive quantity and upcoming/past expiry
+      const activeBatches = allBatches.filter(b => {
+        const qty = Number(b.quantity) || 0;
+        if (qty <= 0) return false;
+        if (!b.expiryDate) return false;
+        const exp = new Date(b.expiryDate);
+        return exp <= targetDate;
+      });
+
+      if (activeBatches.length === 0) return [];
+
+      // Join product names and metadata
+      const productIds = Array.from(new Set(activeBatches.map(b => b.productId)));
+      const products = await db.products.where('id').anyOf(productIds).toArray();
+      const prodMap = new Map(products.map(p => [p.id, p]));
+
+      const enriched = activeBatches.map(b => {
+        const p = prodMap.get(b.productId) || {};
+        const exp = new Date(b.expiryDate);
+        exp.setHours(0, 0, 0, 0);
+        const diffMs = exp.getTime() - now.getTime();
+        const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        
+        // Tier classification: red for <= 3 days / expired, amber for 4-7 days
+        const severity = daysRemaining <= 3 ? 'red' : 'amber';
+
+        return {
+          id: b.id,
+          batchId: b.id,
+          productId: b.productId,
+          productName: p.name || 'Produit Inconnu',
+          barcode: p.barcode || '',
+          category: p.category || 'Général',
+          icon: p.icon || '📦',
+          quantity: Number(b.quantity) || 0,
+          expiryDate: b.expiryDate,
+          receivedAt: b.receivedAt,
+          daysRemaining: daysRemaining,
+          severity: severity
+        };
+      });
+
+      // Sort soonest-first (lowest daysRemaining)
+      return enriched.sort((a, b) => a.daysRemaining - b.daysRemaining);
+    } catch (e) {
+      console.warn('[AnalyticsService] getExpiringBatches error:', e);
+      return [];
+    }
   }
 
   /**
@@ -166,6 +237,7 @@
 
   window.AnalyticsService = {
     getLowStockProducts,
+    getExpiringBatches,
     getTopSellingProducts,
     getRevenueAnalytics
   };

@@ -1,6 +1,13 @@
-// ==========================================
-// CLIENT-SIDE DATABASE INITIALIZATION (INDEXEDDB VIA DEXIE.JS)
-// ==========================================
+// ==============================================================================
+// CLIENT-SIDE DATABASE INITIALIZATION (INDEXEDDB VIA DEXIE.JS & DEXIE CLOUD)
+// ==============================================================================
+// DEXIE CLOUD MULTI-REGISTER ARCHITECTURE & REALM CONFIGURATION:
+// Millora uses Dexie Cloud for real-time peer-to-peer / multi-register synchronization.
+// IMPORTANT: All terminals and cash registers in "the shop" share ONE SINGLE REALM.
+// Every terminal login joins that shared realm and must NEVER create an isolated personal realm.
+// To deploy in production, replace the placeholder databaseUrl below with your real Dexie Cloud URL.
+// ==============================================================================
+
 (function () {
   if (typeof Dexie === 'undefined') {
     console.error('Dexie.js is not loaded! Please include Dexie before db.js.');
@@ -8,24 +15,41 @@
   }
 
   // Create clean database instance
-  const db = new Dexie('FlexiPOS_DB_v3');
+  const db = new Dexie('FlexiPOS_DB_v4');
 
   // Register blocked listener to prevent tab deadlocks
   db.on('blocked', () => {
     console.warn('IndexedDB database open is blocked by another connection/tab.');
   });
 
-  // Target schema setup
+  // Database Schema (FlexiPOS / Millora)
   db.version(1).stores({
-    products: '++id, &barcode, name, category, currentStock, lowStockThreshold, costPrice, sellingPrice',
+    products: '++id, &barcode, name, category, currentStock, lowStockThreshold, costPrice, sellingPrice, unitsPerPack, sellByPackDefault',
     sales: '++id, &orderRef, timestamp, paymentMethod, totalAmount, netProfit',
     saleItems: '++id, saleId, productId',
     stockLogs: '++id, productId, timestamp, type',
     customers: '++id, name, phone, debtLimit, status, createdAt',
     debts: '++id, customerId, saleId, status, createdAt',
     debtPayments: '++id, debtId, paidAt',
-    categories: '++id, &name, icon, createdAt'
+    categories: '++id, &name, icon, createdAt',
+    batches: '++id, productId, expiryDate, quantity, receivedAt',
+    suppliers: '++id, name, phone, createdAt',
+    purchaseOrders: '++id, supplierId, status, createdAt, expectedDate',
+    purchaseOrderItems: '++id, purchaseOrderId, productId, quantityOrdered, quantityReceived, unitCost'
   });
+
+  // Dexie Cloud helper hook (if dexie-cloud is activated in production)
+  if (db.cloud && typeof db.cloud.configure === 'function') {
+    try {
+      db.cloud.configure({
+        databaseUrl: 'https://YOUR_SHOP_SUBDOMAIN.dexie.cloud',
+        requireAuth: false,
+        customLoginGui: true
+      });
+    } catch (e) {
+      console.warn('[Dexie Cloud] Configure notice:', e.message);
+    }
+  }
 
   const DEFAULT_SEED_CATEGORIES = [
     { name: 'Beverage', icon: '☕', createdAt: new Date().toISOString() },
@@ -37,21 +61,162 @@
   ];
 
   const DEFAULT_SEED_PRODUCTS = [
-    { barcode: '890123456001', name: 'Café Espresso', category: 'Beverage', costPrice: 60, sellingPrice: 150, currentStock: 99, lowStockThreshold: 15, icon: '☕', image: 'https://images.unsplash.com/photo-1510591509098-f4fdc6d0ff04?w=400&auto=format&fit=crop&q=80', createdAt: new Date().toISOString() },
-    { barcode: '890123456002', name: 'Thé Vert Naturel', category: 'Beverage', costPrice: 40, sellingPrice: 100, currentStock: 50, lowStockThreshold: 10, icon: '🍵', image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=400&auto=format&fit=crop&q=80', createdAt: new Date().toISOString() },
-    { barcode: '890123456003', name: 'Croissant Frais', category: 'Bakery', costPrice: 50, sellingPrice: 120, currentStock: 35, lowStockThreshold: 10, icon: '🥐', image: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=400&auto=format&fit=crop&q=80', createdAt: new Date().toISOString() },
-    { barcode: '890123456004', name: 'Muffin Chocolat', category: 'Bakery', costPrice: 80, sellingPrice: 180, currentStock: 25, lowStockThreshold: 8, icon: '🧁', image: 'https://images.unsplash.com/photo-1607958996333-41aef7caefaa?w=400&auto=format&fit=crop&q=80', createdAt: new Date().toISOString() },
-    { barcode: '890123456005', name: 'Impression Document (Couleur)', category: 'Printing', costPrice: 8, sellingPrice: 25, currentStock: 999, lowStockThreshold: 50, icon: '📄', image: 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=400&auto=format&fit=crop&q=80', createdAt: new Date().toISOString() },
-    { barcode: '890123456006', name: 'Tirage Photo A4', category: 'Printing', costPrice: 70, sellingPrice: 200, currentStock: 150, lowStockThreshold: 20, icon: '🖼️', image: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=400&auto=format&fit=crop&q=80', createdAt: new Date().toISOString() },
-    { barcode: '890123456007', name: 'Écouteurs Sans Fil', category: 'Electronics', costPrice: 1600, sellingPrice: 2800, currentStock: 15, lowStockThreshold: 5, icon: '🎧', image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=400&auto=format&fit=crop&q=80', createdAt: new Date().toISOString() },
-    { barcode: '890123456008', name: 'Câble USB-C Rapide', category: 'Electronics', costPrice: 280, sellingPrice: 650, currentStock: 40, lowStockThreshold: 10, icon: '🔌', image: 'https://images.unsplash.com/photo-1612815154858-60aa4c59eaa6?w=400&auto=format&fit=crop&q=80', createdAt: new Date().toISOString() },
-    { barcode: '890123456009', name: 'Rouleaux Papier Thermique (x5)', category: 'Supplies', costPrice: 500, sellingPrice: 900, currentStock: 30, lowStockThreshold: 10, icon: '📜', image: 'https://images.unsplash.com/photo-1607344645866-009c320c5ab8?w=400&auto=format&fit=crop&q=80', createdAt: new Date().toISOString() }
+    {
+      barcode: '890123456001',
+      name: 'Café Espresso',
+      category: 'Beverage',
+      costPrice: 60,
+      sellingPrice: 150,
+      currentStock: 99,
+      lowStockThreshold: 15,
+      unitsPerPack: 10,
+      packUnitLabel: 'boîte',
+      packPrice: 1350,
+      sellByPackDefault: false,
+      icon: '☕',
+      image: 'https://images.unsplash.com/photo-1510591509098-f4fdc6d0ff04?w=400&auto=format&fit=crop&q=80',
+      createdAt: new Date().toISOString()
+    },
+    {
+      barcode: '890123456002',
+      name: 'Thé Vert Naturel',
+      category: 'Beverage',
+      costPrice: 40,
+      sellingPrice: 100,
+      currentStock: 50,
+      lowStockThreshold: 10,
+      unitsPerPack: 1,
+      packUnitLabel: '',
+      packPrice: null,
+      sellByPackDefault: false,
+      icon: '🍵',
+      image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=400&auto=format&fit=crop&q=80',
+      createdAt: new Date().toISOString()
+    },
+    {
+      barcode: '890123456003',
+      name: 'Croissant Frais',
+      category: 'Bakery',
+      costPrice: 50,
+      sellingPrice: 120,
+      currentStock: 35,
+      lowStockThreshold: 10,
+      unitsPerPack: 1,
+      packUnitLabel: '',
+      packPrice: null,
+      sellByPackDefault: false,
+      icon: '🥐',
+      image: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=400&auto=format&fit=crop&q=80',
+      createdAt: new Date().toISOString()
+    },
+    {
+      barcode: '890123456004',
+      name: 'Muffin Chocolat',
+      category: 'Bakery',
+      costPrice: 80,
+      sellingPrice: 180,
+      currentStock: 25,
+      lowStockThreshold: 8,
+      unitsPerPack: 6,
+      packUnitLabel: 'pack',
+      packPrice: 1000,
+      sellByPackDefault: false,
+      icon: '🧁',
+      image: 'https://images.unsplash.com/photo-1607958996333-41aef7caefaa?w=400&auto=format&fit=crop&q=80',
+      createdAt: new Date().toISOString()
+    },
+    {
+      barcode: '890123456005',
+      name: 'Impression Document (Couleur)',
+      category: 'Printing',
+      costPrice: 8,
+      sellingPrice: 25,
+      currentStock: 999,
+      lowStockThreshold: 50,
+      unitsPerPack: 1,
+      packUnitLabel: '',
+      packPrice: null,
+      sellByPackDefault: false,
+      icon: '📄',
+      image: 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=400&auto=format&fit=crop&q=80',
+      createdAt: new Date().toISOString()
+    },
+    {
+      barcode: '890123456006',
+      name: 'Tirage Photo A4',
+      category: 'Printing',
+      costPrice: 70,
+      sellingPrice: 200,
+      currentStock: 150,
+      lowStockThreshold: 20,
+      unitsPerPack: 1,
+      packUnitLabel: '',
+      packPrice: null,
+      sellByPackDefault: false,
+      icon: '🖼️',
+      image: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=400&auto=format&fit=crop&q=80',
+      createdAt: new Date().toISOString()
+    },
+    {
+      barcode: '890123456007',
+      name: 'Écouteurs Sans Fil',
+      category: 'Electronics',
+      costPrice: 1600,
+      sellingPrice: 2800,
+      currentStock: 15,
+      lowStockThreshold: 5,
+      unitsPerPack: 1,
+      packUnitLabel: '',
+      packPrice: null,
+      sellByPackDefault: false,
+      icon: '🎧',
+      image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=400&auto=format&fit=crop&q=80',
+      createdAt: new Date().toISOString()
+    },
+    {
+      barcode: '890123456008',
+      name: 'Câble USB-C Rapide',
+      category: 'Electronics',
+      costPrice: 280,
+      sellingPrice: 650,
+      currentStock: 40,
+      lowStockThreshold: 10,
+      unitsPerPack: 1,
+      packUnitLabel: '',
+      packPrice: null,
+      sellByPackDefault: false,
+      icon: '🔌',
+      image: 'https://images.unsplash.com/photo-1612815154858-60aa4c59eaa6?w=400&auto=format&fit=crop&q=80',
+      createdAt: new Date().toISOString()
+    },
+    {
+      barcode: '890123456009',
+      name: 'Rouleaux Papier Thermique (x5)',
+      category: 'Supplies',
+      costPrice: 500,
+      sellingPrice: 900,
+      currentStock: 30,
+      lowStockThreshold: 10,
+      unitsPerPack: 5,
+      packUnitLabel: 'carton',
+      packPrice: 4200,
+      sellByPackDefault: true,
+      icon: '📜',
+      image: 'https://images.unsplash.com/photo-1607344645866-009c320c5ab8?w=400&auto=format&fit=crop&q=80',
+      createdAt: new Date().toISOString()
+    }
   ];
 
   const DEFAULT_SEED_CUSTOMERS = [
     { name: 'Ahmed Benali', phone: '0550123456', debtLimit: 10000, status: 'active', notes: 'Client fidèle', createdAt: new Date(Date.now() - 86400000 * 10).toISOString() },
     { name: 'Karim Ziani', phone: '0770987654', debtLimit: 5000, status: 'active', notes: 'Paiement hebdomadaire', createdAt: new Date(Date.now() - 86400000 * 5).toISOString() },
     { name: 'Sara Mansouri', phone: '0661223344', debtLimit: 8000, status: 'active', notes: 'Bureau voisin', createdAt: new Date(Date.now() - 86400000 * 2).toISOString() }
+  ];
+
+  const DEFAULT_SEED_SUPPLIERS = [
+    { name: 'Sarl Alger Papeterie', phone: '023123456', createdAt: new Date(Date.now() - 86400000 * 30).toISOString() },
+    { name: 'Grossiste Boissons & Confiserie', phone: '0555987654', createdAt: new Date(Date.now() - 86400000 * 20).toISOString() },
+    { name: 'Distributeur Tech & Accessoires', phone: '0661112233', createdAt: new Date(Date.now() - 86400000 * 15).toISOString() }
   ];
 
   async function initDatabase() {
@@ -83,7 +248,7 @@
         await db.debts.bulkAdd([
           {
             customerId: c1,
-            orderRef: 'DZ-1788519227578-123',
+            orderRef: 'DZ-T1-1788519227578-123',
             amount: 2800,
             amountPaidNow: 1000,
             remainingAmount: 1800,
@@ -93,7 +258,7 @@
           },
           {
             customerId: c2,
-            orderRef: 'DZ-1788277982113-206',
+            orderRef: 'DZ-T1-1788277982113-206',
             amount: 1200,
             amountPaidNow: 0,
             remainingAmount: 1200,
@@ -103,15 +268,60 @@
           }
         ]);
       }
+
+      // Auto-seed default suppliers if empty
+      if (db.suppliers) {
+        const supCount = await db.suppliers.count();
+        if (supCount === 0) {
+          await db.suppliers.bulkAdd(DEFAULT_SEED_SUPPLIERS);
+        }
+      }
+
+      // Auto-seed sample expiry batch for demonstration (Croissant expiring in 2 days, Muffin in 6 days)
+      if (db.batches) {
+        const batchCount = await db.batches.count();
+        if (batchCount === 0) {
+          const products = await db.products.toArray();
+          const croissant = products.find(p => p.barcode === '890123456003');
+          const muffin = products.find(p => p.barcode === '890123456004');
+          const now = Date.now();
+          const sampleBatches = [];
+
+          if (croissant) {
+            sampleBatches.push({
+              productId: croissant.id,
+              expiryDate: new Date(now + 2 * 86400000).toISOString().slice(0, 10), // D-2 (Red tier)
+              quantity: 15,
+              receivedAt: new Date(now - 86400000).toISOString()
+            });
+          }
+          if (muffin) {
+            sampleBatches.push({
+              productId: muffin.id,
+              expiryDate: new Date(now + 6 * 86400000).toISOString().slice(0, 10), // D-6 (Amber tier)
+              quantity: 10,
+              receivedAt: new Date(now - 86400000 * 2).toISOString()
+            });
+          }
+          if (sampleBatches.length > 0) {
+            await db.batches.bulkAdd(sampleBatches);
+          }
+        }
+      }
     } catch (err) {
-      console.error('IndexedDB engine failed or blocked:', err);
+      console.warn('IndexedDB engine notice/error during init:', err);
       
-      // Auto-heal corrupted browser IndexedDB storage
-      if (err.name === 'UnknownError' || err.name === 'DatabaseClosedError') {
+      // Auto-heal corrupted browser IndexedDB storage or old incompatible schema
+      try {
         console.warn('Attempting IndexedDB auto-recovery/reset...');
         await db.delete();
         await db.open();
         console.log('IndexedDB successfully re-initialized.');
+        // Re-run seed on freshly re-opened database
+        await db.products.bulkAdd(DEFAULT_SEED_PRODUCTS);
+        await db.categories.bulkAdd(DEFAULT_SEED_CATEGORIES);
+      } catch (recoveryErr) {
+        console.error('IndexedDB auto-recovery failed:', recoveryErr);
       }
     }
   }
@@ -190,7 +400,7 @@
 
     let category = null;
     if (id) {
-      category = await db.categories.get(Number(id) || id);
+      category = await db.categories.get(id);
     }
     if (!category) {
       category = await db.categories.where('name').equalsIgnoreCase(cleanName).first();
@@ -231,7 +441,7 @@
     if (!db.isOpen()) await db.open();
     let category = null;
     if (id) {
-      category = await db.categories.get(Number(id) || id);
+      category = await db.categories.get(id);
     }
     if (!category) {
       throw new Error('Catégorie introuvable.');
@@ -273,7 +483,8 @@
     deleteCategory: deleteCategory,
     DEFAULT_SEED_PRODUCTS: DEFAULT_SEED_PRODUCTS,
     DEFAULT_SEED_CATEGORIES: DEFAULT_SEED_CATEGORIES,
-    DEFAULT_SEED_CUSTOMERS: DEFAULT_SEED_CUSTOMERS
+    DEFAULT_SEED_CUSTOMERS: DEFAULT_SEED_CUSTOMERS,
+    DEFAULT_SEED_SUPPLIERS: DEFAULT_SEED_SUPPLIERS
   };
 
   // Eagerly initialize on script load

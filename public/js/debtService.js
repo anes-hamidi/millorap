@@ -1,6 +1,6 @@
-// ==========================================
-// CLIENT-SIDE DEBT / CUSTOMER CREDIT SERVICE
-// ==========================================
+// ==============================================================================
+// CLIENT-SIDE DEBT / CUSTOMER CREDIT SERVICE (OPAQUE STRING ID COMPATIBLE)
+// ==============================================================================
 (function () {
   function db() {
     return window.FlexiDB && window.FlexiDB.db;
@@ -79,7 +79,7 @@
   async function updateCustomer(id, { name, phone, debtLimit, notes }) {
     const d = db();
     if (!d) throw new Error('Database not ready');
-    const custId = Number(id);
+    const custId = id;
     const existing = await d.customers.get(custId);
     if (!existing) throw new Error('Client introuvable');
 
@@ -180,7 +180,7 @@
     const d = db();
     if (!d) throw new Error('Database not ready');
 
-    const custId = Number(customerId);
+    const custId = customerId;
     const customer = await d.customers.get(custId);
     if (!customer) throw new Error('Client introuvable');
 
@@ -309,7 +309,7 @@
   async function recordCustomerLumpSumPayment(customerId, amount, note = '') {
     const d = db();
     if (!d) throw new Error('Database not ready');
-    const custId = Number(customerId);
+    const custId = customerId;
     const customer = await d.customers.get(custId);
     if (!customer) throw new Error('Client introuvable');
 
@@ -408,7 +408,7 @@
   async function deleteCustomer(customerId) {
     const d = db();
     if (!d) throw new Error('Database not ready');
-    const custId = Number(customerId);
+    const custId = customerId;
     const debts = await d.debts.where('customerId').equals(custId).toArray();
     const openDebts = debts.filter(d => d.status === 'open');
     if (openDebts.length > 0) {

@@ -1,36 +1,37 @@
-// ==========================================
-// CLIENT-SIDE CHECKOUT SERVICE (ATOMIC INDEXEDDB TRANSACTIONS)
-// ==========================================
+// ==============================================================================
+// CLIENT-SIDE CHECKOUT SERVICE (ATOMIC INDEXEDDB TRANSACTIONS & MULTI-REGISTER)
+// ==============================================================================
 (function() {
   /**
    * Process an atomic checkout transaction.
-   * Runs in an isolated Read-Write transaction across all 4 stores:
+   * Runs in an isolated Read-Write transaction across all stores:
    * products, sales, saleItems, stockLogs.
    *
    * @param {Object} orderData
-   * @param {Array} orderData.items - Array of { id, qty, customDiscount }
+   * @param {Array} orderData.items - Array of { id, qty, saleUnit: 'unit'|'pack' }
    * @param {number} orderData.discountPercent - Order-wide discount percent (0-100)
-   * @param {string} orderData.paymentMethod - 'cash' | 'card' | 'qr'
+   * @param {string} orderData.paymentMethod - 'cash' | 'card' | 'qr' | 'credit'
    * @returns {Promise<Object>} Completed sale receipt and audit summary
    */
   async function processCheckout({ items, discountPercent = 0, paymentMethod = 'cash' }) {
-  if (window.FlexiDB && window.FlexiDB.init) {
-    await window.FlexiDB.init();
-  }
-  
-  if (!window.FlexiDB || !window.FlexiDB.db) {
-    throw new Error('Database is not initialized. Please refresh the page.');
-  }
-  const db = window.FlexiDB.db;
+    if (window.FlexiDB && window.FlexiDB.init) {
+      await window.FlexiDB.init();
+    }
+    
+    if (!window.FlexiDB || !window.FlexiDB.db) {
+      throw new Error('Database is not initialized. Please refresh the page.');
+    }
+    const db = window.FlexiDB.db;
 
-    // Generate unique human-readable Order Reference
-    const orderRef = 'DZ-' + Date.now().toString().slice(-6) + '-' + Math.floor(100 + Math.random() * 900);
+    // Terminal-scoped unique human-readable Order Reference
+    const terminalId = localStorage.getItem('pos_terminal_id') || 'T1';
+    const orderRef = 'DZ-' + terminalId + '-' + Date.now().toString(36) + '-' + Math.floor(100 + Math.random() * 900);
     const timestamp = new Date().toISOString();
 
-    // Execute atomic IndexedDB transaction across all 4 stores
+    // Execute atomic IndexedDB transaction across all stores
     return await db.transaction('rw', db.products, db.sales, db.saleItems, db.stockLogs, async () => {
       // 1. Fetch fresh state of all products in cart & lock/validate stock
-      const productIds = items.map(i => parseInt(i.id, 10) || i.id);
+      const productIds = items.map(i => i.id);
       const freshProducts = await db.products.where('id').anyOf(productIds).toArray();
       const productMap = new Map(freshProducts.map(p => [p.id, p]));
 
@@ -39,8 +40,7 @@
       const validatedLineItems = [];
 
       for (const item of items) {
-        const pId = parseInt(item.id, 10) || item.id;
-        const product = productMap.get(pId);
+        const product = productMap.get(item.id);
 
         if (!product) {
           throw new Error('Product with ID ' + item.id + ' was not found in inventory.');
@@ -51,17 +51,38 @@
           throw new Error('Invalid quantity for ' + product.name + ': ' + requestedQty);
         }
 
-        // Strict stock validation
-        if (product.currentStock < requestedQty) {
+        // Unit vs Pack selling logic (Task 2)
+        const unitsPerPack = Math.max(1, parseInt(product.unitsPerPack, 10) || 1);
+        const isPack = item.saleUnit === 'pack' && unitsPerPack > 1;
+        const multiplier = isPack ? unitsPerPack : 1;
+        const baseQuantity = requestedQty * multiplier;
+
+        // Strict stock validation against base inventory units
+        if (product.currentStock < baseQuantity) {
+          const unitMsg = isPack ? ` (${requestedQty} ${product.packUnitLabel || 'packs'} = ${baseQuantity} unités)` : '';
           throw new Error(
-            'Insufficient stock for "' + product.name + '". Available: ' + product.currentStock + ', Requested: ' + requestedQty
+            'Insufficient stock for "' + product.name + '". Available: ' + product.currentStock + ', Requested: ' + baseQuantity + unitMsg
           );
         }
 
-        const sellingPrice = Number(product.sellingPrice) || 0;
-        const costPrice = Number(product.costPrice) || 0;
-        const lineTotal = sellingPrice * requestedQty;
-        const lineCost = costPrice * requestedQty;
+        const baseSellingPrice = Number(product.sellingPrice) || 0;
+        const baseCostPrice = Number(product.costPrice) || 0;
+
+        let unitSellingPrice;
+        let unitCostPrice;
+
+        if (isPack) {
+          unitSellingPrice = (product.packPrice != null && Number(product.packPrice) > 0)
+            ? Number(product.packPrice)
+            : (baseSellingPrice * multiplier);
+          unitCostPrice = baseCostPrice * multiplier;
+        } else {
+          unitSellingPrice = baseSellingPrice;
+          unitCostPrice = baseCostPrice;
+        }
+
+        const lineTotal = unitSellingPrice * requestedQty;
+        const lineCost = unitCostPrice * requestedQty;
         const lineProfit = lineTotal - lineCost;
 
         subtotal += lineTotal;
@@ -72,9 +93,13 @@
           productId: product.id,
           productName: product.name,
           barcode: product.barcode || '',
+          saleUnit: isPack ? 'pack' : 'unit',
+          packUnitLabel: product.packUnitLabel || '',
+          unitMultiplier: multiplier,
           quantity: requestedQty,
-          unitCostPrice: costPrice,
-          unitSellingPrice: sellingPrice,
+          baseQuantity: baseQuantity,
+          unitCostPrice: unitCostPrice,
+          unitSellingPrice: unitSellingPrice,
           lineTotal,
           lineCost,
           lineProfit
@@ -89,15 +114,15 @@
       // Proportionally adjust cost / net profit with discount
       const netProfit = totalAmount - totalCost;
 
-      // 2. Decrement stock & record audit logs for each product
+      // 2. Relative stock decrement (Task 1) & audit log creation
       for (const line of validatedLineItems) {
         const prevStock = line.product.currentStock;
-        const newStock = prevStock - line.quantity;
+        const newStock = prevStock - line.baseQuantity;
 
-        // Decrement product currentStock in IndexedDB
-        await db.products.update(line.productId, {
-          currentStock: newStock,
-          updatedAt: timestamp
+        // Multi-register race-condition safe relative stock decrement
+        await db.products.where('id').equals(line.productId).modify(p => {
+          p.currentStock = (Number(p.currentStock) || 0) - line.baseQuantity;
+          p.updatedAt = timestamp;
         });
 
         // Insert stock movement log
@@ -105,24 +130,28 @@
           productId: line.productId,
           timestamp,
           type: 'SALE',
-          quantityChange: -line.quantity,
+          quantityChange: -line.baseQuantity,
           previousStock: prevStock,
           newStock: newStock,
           referenceId: orderRef,
-          note: 'Sale ' + orderRef + ' (' + paymentMethod.toUpperCase() + ')'
+          note: `Sale ${orderRef} (${paymentMethod.toUpperCase()}) - ${line.quantity} ${line.saleUnit === 'pack' ? (line.packUnitLabel || 'pack') : 'unité(s)'}`
         });
       }
 
       // 3. Insert primary Sale record
       const lineItemsSnapshot = validatedLineItems.map(l => ({
+        id: l.productId,
         name: l.productName,
         qty: l.quantity,
+        saleUnit: l.saleUnit,
+        unitMultiplier: l.unitMultiplier,
         price: l.unitSellingPrice,
         total: l.lineTotal
       }));
 
       const saleId = await db.sales.add({
         orderRef,
+        terminalId,
         timestamp,
         paymentMethod: paymentMethod.toLowerCase(),
         subtotal,
@@ -142,7 +171,11 @@
           productId: line.productId,
           productName: line.productName,
           barcode: line.barcode,
+          saleUnit: line.saleUnit,
+          packUnitLabel: line.packUnitLabel,
+          unitMultiplier: line.unitMultiplier,
           quantity: line.quantity,
+          baseQuantity: line.baseQuantity,
           unitCostPrice: line.unitCostPrice,
           unitSellingPrice: line.unitSellingPrice,
           lineTotal: line.lineTotal,
@@ -155,6 +188,7 @@
         success: true,
         saleId,
         orderRef,
+        terminalId,
         timestamp,
         paymentMethod,
         subtotal,
@@ -167,6 +201,9 @@
           id: l.productId,
           name: l.productName,
           barcode: l.barcode,
+          saleUnit: l.saleUnit,
+          packUnitLabel: l.packUnitLabel,
+          unitMultiplier: l.unitMultiplier,
           qty: l.quantity,
           price: l.unitSellingPrice,
           cost: l.unitCostPrice,
@@ -175,6 +212,7 @@
       };
     });
   }
+
   /**
    * Process an order return / refund transaction.
    * Restores product stock, creates RESTOCK logs, and marks sale as refunded.
@@ -199,35 +237,36 @@
         lineItems = sale.items.map(i => ({
           productId: i.id,
           productName: i.name,
-          quantity: i.qty || 1
+          quantity: i.qty || 1,
+          unitMultiplier: i.unitMultiplier || 1,
+          baseQuantity: (i.qty || 1) * (i.unitMultiplier || 1)
         }));
       }
 
-      // Restock products & add RESTOCK logs
+      // Restock products & add RESTOCK logs using relative .modify()
       for (const line of lineItems) {
         if (!line.productId) continue;
+        const returnQty = line.baseQuantity || ((line.quantity || 1) * (line.unitMultiplier || 1));
+        
+        let prevStock = 0;
         const product = await db.products.get(line.productId);
-        if (product) {
-          const prevStock = Number(product.currentStock) || 0;
-          const returnQty = Number(line.quantity) || 1;
-          const newStock = prevStock + returnQty;
+        if (product) prevStock = Number(product.currentStock) || 0;
 
-          await db.products.update(product.id, {
-            currentStock: newStock,
-            updatedAt: timestamp
-          });
+        await db.products.where('id').equals(line.productId).modify(p => {
+          p.currentStock = (Number(p.currentStock) || 0) + returnQty;
+          p.updatedAt = timestamp;
+        });
 
-          await db.stockLogs.add({
-            productId: product.id,
-            timestamp,
-            type: 'RESTOCK',
-            quantityChange: returnQty,
-            previousStock: prevStock,
-            newStock: newStock,
-            referenceId: `REFUND_${orderRef}`,
-            note: `Retour commande #${orderRef} (${reason})`
-          });
-        }
+        await db.stockLogs.add({
+          productId: line.productId,
+          timestamp,
+          type: 'RESTOCK',
+          quantityChange: returnQty,
+          previousStock: prevStock,
+          newStock: prevStock + returnQty,
+          referenceId: `REFUND_${orderRef}`,
+          note: `Retour commande #${orderRef} (${reason})`
+        });
       }
 
       // If this was a credit sale, close or mark debt as refunded
