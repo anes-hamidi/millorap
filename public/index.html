@@ -72,20 +72,34 @@
     <!-- Sidebar Navigation Links Groups -->
     <div class="flex-1 overflow-y-auto p-2 flex flex-col gap-3 text-xs font-semibold">
       
-      <!-- Group 1: Commerce & POS -->
+      <!-- Group 1: Reception & Quick Transfer (Default Main Station) -->
+      <div class="flex flex-col gap-1">
+        <span class="sidebar-group-title text-[9px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 pb-0.5">Reception</span>
+        
+        <button id="nav-transfer" data-workspace="transfer" class="nav-link active relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Mobile-to-PC File Reception Station (F1)">
+          <div class="flex items-center gap-2.5">
+            <span class="nav-icon text-base">📲</span>
+            <span class="sidebar-expanded-only">Mobile File Drop</span>
+          </div>
+          <span class="nav-compact-label">Mobile</span>
+          <span class="sidebar-expanded-only text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 font-mono">F1</span>
+        </button>
+      </div>
+
+      <!-- Group 2: Commerce & POS -->
       <div class="flex flex-col gap-1">
         <span class="sidebar-group-title text-[9px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 pb-0.5">Commerce</span>
         
-        <button id="nav-pos" data-workspace="pos" class="nav-link active relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="POS Cashier Terminal (F1)">
+        <button id="nav-pos" data-workspace="pos" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="POS Cashier Terminal (F2)">
           <div class="flex items-center gap-2.5">
             <span class="nav-icon text-base">🛒</span>
             <span class="sidebar-expanded-only">POS Cashier</span>
           </div>
           <span class="nav-compact-label">POS</span>
-          <span class="sidebar-expanded-only text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-mono">F1</span>
+          <span class="sidebar-expanded-only text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-mono">F2</span>
         </button>
 
-        <button id="nav-inventory" data-workspace="inventory" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Inventory & Stock (F2)">
+        <button id="nav-inventory" data-workspace="inventory" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Inventory & Stock (F3)">
           <div class="flex items-center gap-2.5">
             <span class="nav-icon text-base">📦</span>
             <span class="sidebar-expanded-only">Inventory & Stock</span>
@@ -94,7 +108,7 @@
           <span id="nav-low-stock-badge" class="nav-badge-pill hidden text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">0</span>
         </button>
 
-        <button id="nav-analytics" data-workspace="analytics" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Sales & Analytics (F3)">
+        <button id="nav-analytics" data-workspace="analytics" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Sales & Analytics (F4)">
           <div class="flex items-center gap-2.5">
             <span class="nav-icon text-base">📊</span>
             <span class="sidebar-expanded-only">Sales & Analytics</span>
@@ -113,11 +127,11 @@
         </button>
       </div>
 
-      <!-- Group 2: Document & Printing -->
+      <!-- Group 3: Document & Printing -->
       <div class="flex flex-col gap-1">
         <span class="sidebar-group-title text-[9px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 pb-0.5">Documents</span>
         
-        <button id="nav-print" data-workspace="print" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Document Print Hub (F4)">
+        <button id="nav-print" data-workspace="print" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Document Print Hub (F5)">
           <div class="flex items-center gap-2.5">
             <span class="nav-icon text-base">🖨️</span>
             <span class="sidebar-expanded-only">Print Hub</span>
@@ -126,7 +140,7 @@
           <span class="sidebar-expanded-only text-[10px] text-slate-400 font-mono">44k</span>
         </button>
 
-        <button id="nav-merge" data-workspace="merge" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="PDF Multi-File Merge Studio">
+        <button id="nav-merge" data-workspace="merge" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="PDF Multi-File Merge Studio (F6)">
           <div class="flex items-center gap-2.5">
             <span class="nav-icon text-base">✨</span>
             <span class="sidebar-expanded-only">PDF Merge Studio</span>
@@ -134,22 +148,13 @@
           <span class="nav-compact-label">Merge</span>
           <span id="nav-merge-badge" class="nav-badge-pill hidden text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400">0</span>
         </button>
-
-        <button id="nav-transfer" data-workspace="transfer" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="Mobile File Reception DropZone">
-          <div class="flex items-center gap-2.5">
-            <span class="nav-icon text-base">📲</span>
-            <span class="sidebar-expanded-only">Mobile File Drop</span>
-          </div>
-          <span class="nav-compact-label">Mobile</span>
-          <span class="sidebar-expanded-only text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">QR</span>
-        </button>
       </div>
 
-      <!-- Group 3: Creative & Generator -->
+      <!-- Group 4: Creative & Generator -->
       <div class="flex flex-col gap-1">
         <span class="sidebar-group-title text-[9px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 pb-0.5">Creative</span>
         
-        <button id="nav-qr" data-workspace="qr" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="QR Code Studio">
+        <button id="nav-qr" data-workspace="qr" class="nav-link relative w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="QR Code Studio (F7)">
           <div class="flex items-center gap-2.5">
             <span class="nav-icon text-base">📱</span>
             <span class="sidebar-expanded-only">QR Code Studio</span>
@@ -159,7 +164,7 @@
         </button>
       </div>
 
-      <!-- Group 4: System & Settings -->
+      <!-- Group 5: System & Settings -->
       <div class="flex flex-col gap-1">
         <span class="sidebar-group-title text-[9px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 pb-0.5">System</span>
         
@@ -199,10 +204,10 @@
           
           <div class="flex flex-col min-w-0">
             <div class="flex items-center gap-2">
-              <span id="page-icon" class="text-lg">🛒</span>
-              <h2 id="page-title" class="text-sm sm:text-base font-extrabold text-slate-800 dark:text-slate-100 truncate">POS Cashier Terminal</h2>
+              <span id="page-icon" class="text-lg">📲</span>
+              <h2 id="page-title" class="text-sm sm:text-base font-extrabold text-slate-800 dark:text-slate-100 truncate">Mobile-to-PC File Reception Station</h2>
             </div>
-            <span id="page-subtitle" class="text-[11px] text-slate-400 font-medium truncate">Fast barcode checkout, order register & receipts</span>
+            <span id="page-subtitle" class="text-[11px] text-slate-400 font-medium truncate">Scan with smartphone camera to instantly receive customer files directly to PC</span>
           </div>
         </div>
 
@@ -851,8 +856,8 @@
     </div>
     <!-- END SECTION 2: Shop Print Center -->
 
-    <!-- SECTION 3: POS Terminal (Default Main Page) -->
-    <div id="section-pos-app" class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+    <!-- SECTION 3: POS Terminal (Secondary Page) -->
+    <div id="section-pos-app" class="workspace-section hidden grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
       <!-- Proactive Backup Reminder Banner -->
       <div id="pos-backup-reminder-banner" class="hidden col-span-full mb-2 p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/80 flex items-center justify-between text-xs text-amber-800 dark:text-amber-200 shadow-sm animate-pulse">
@@ -1342,73 +1347,160 @@
     </div>
     <!-- END SECTION 6: Merge -->
 
-    <!-- SECTION 7: Dedicated Mobile File DropZone Workspace -->
-    <div id="section-transfer-app" class="workspace-section hidden flex flex-col gap-6">
+    <!-- SECTION 7: Dedicated Mobile File DropZone Workspace (Default Main Screen) -->
+    <div id="section-transfer-app" class="workspace-section flex flex-col gap-6">
       
-      <div class="glass-panel p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col items-center text-center gap-5 max-w-2xl mx-auto w-full">
-        
-        <div class="flex flex-col items-center gap-1">
-          <div class="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center text-2xl mb-1 shadow-sm">
+      <!-- Top Section Banner -->
+      <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3.5">
+          <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 text-white flex items-center justify-center text-2xl shadow-md shadow-amber-500/20 shrink-0">
             📲
           </div>
-          <h2 class="text-base font-extrabold text-slate-800 dark:text-slate-100">Mobile-to-PC File Reception Station</h2>
-          <p class="text-xs text-slate-400 max-w-md">Customers scan the QR code with their mobile phone camera to instantly upload documents, photos, or homework directly to this PC.</p>
-        </div>
-
-        <!-- High-Contrast QR Code Container -->
-        <div class="flex flex-col items-center gap-3">
-          <div class="p-4 bg-white rounded-3xl border border-indigo-100 shadow-lg flex items-center justify-center">
-            <div id="page-transfer-qr-canvas"></div>
-          </div>
-
-          <!-- Network Mode Switcher: Cloud (Anywhere / 4G) vs Local Wi-Fi -->
-          <div class="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs">
-            <button id="transfer-mode-cloud-btn" type="button" class="px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 bg-indigo-600 text-white shadow-sm">
-              <span>🌐</span> <span>Cloud (4G / Anywhere)</span>
-            </button>
-            <button id="transfer-mode-local-btn" type="button" class="px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900">
-              <span>📶</span> <span>Local Wi-Fi</span>
-            </button>
-          </div>
-
-          <!-- Active URL display -->
-          <div class="flex items-center gap-2 max-w-sm text-center px-3 py-1 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
-            <span class="text-[11px] text-indigo-600 dark:text-indigo-400 font-mono font-bold break-all" id="page-transfer-target-url">Loading URL...</span>
-            <button id="page-transfer-copy-url-btn" type="button" class="text-xs text-slate-400 hover:text-indigo-600 p-1" title="Copy URL">📋</button>
-          </div>
-        </div>
-
-        <!-- Live Connection Status Badge -->
-        <div id="page-transfer-status-badge" class="px-4 py-1.5 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-2 animate-pulse">
-          <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
-          <span id="page-transfer-status-text">Waiting for customer mobile connection...</span>
-        </div>
-
-        <!-- Folder Notice & Test Button -->
-        <div class="w-full p-3.5 bg-indigo-50/70 dark:bg-indigo-950/40 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-between text-xs text-left">
           <div>
-            <span class="font-bold text-indigo-900 dark:text-indigo-200">Local Intake Destination:</span>
-            <p class="font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">📁 uploads/ (Protected Storage)</p>
+            <div class="flex items-center gap-2 flex-wrap">
+              <h2 class="text-base font-extrabold text-slate-800 dark:text-slate-100">Mobile-to-PC File Reception Station</h2>
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">Direct P2P Link</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-0.5">Customers scan the QR code with their mobile camera to instantly upload documents, homework, exams, or photos directly to this PC.</p>
           </div>
-          <button id="page-transfer-test-btn" type="button" class="px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 text-indigo-700 dark:text-indigo-300 text-xs font-bold shadow-sm transition">
-            Test on Browser ↗
+        </div>
+
+        <div class="flex items-center gap-3 flex-wrap">
+          <!-- Live Connection Status Badge -->
+          <div id="page-transfer-status-badge" class="px-3.5 py-1.5 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-2 animate-pulse">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+            <span id="page-transfer-status-text">Waiting for customer mobile connection...</span>
+          </div>
+
+          <button id="page-transfer-test-btn" type="button" class="px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold shadow-sm transition flex items-center gap-1.5">
+            <span>🚀</span> <span>Test Portal ↗</span>
           </button>
         </div>
+      </div>
 
-        <!-- Live Received Files Stream -->
-        <div class="w-full flex flex-col gap-2 text-left pt-2 border-t border-slate-200/60 dark:border-slate-800">
-          <div class="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
-            <span class="flex items-center gap-1.5">
-              <span>📥</span> <span>Recently Received Files:</span>
-            </span>
+      <!-- Main Side-by-Side Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        
+        <!-- LEFT COLUMN: QR Station & Connectivity Settings (5 Cols) -->
+        <div class="lg:col-span-5 glass-panel p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-5">
+          
+          <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
             <div class="flex items-center gap-2">
-              <span id="page-transfer-count" class="font-mono font-bold text-emerald-600">0 files</span>
-              <button id="page-transfer-clear-btn" type="button" class="px-2.5 py-1 rounded-lg text-[11px] bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 font-bold transition">Clear Stream</button>
+              <span class="text-lg">📷</span>
+              <h3 class="text-sm font-extrabold text-slate-800 dark:text-slate-100">Customer QR Scanner</h3>
+            </div>
+            <span class="text-[11px] font-semibold text-slate-400">Point phone camera</span>
+          </div>
+
+          <!-- QR Code Canvas Display -->
+          <div class="flex flex-col items-center gap-4 py-1">
+            <div class="p-4 bg-white rounded-3xl border-2 border-indigo-100 dark:border-indigo-900/50 shadow-xl flex items-center justify-center relative group">
+              <div id="page-transfer-qr-canvas" class="flex items-center justify-center"></div>
+            </div>
+
+            <!-- Network Mode Switcher: Cloud (Anywhere / 4G) vs Local Wi-Fi -->
+            <div class="w-full flex flex-col gap-1.5">
+              <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Network Routing Channel:</label>
+              <div class="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs">
+                <button id="transfer-mode-cloud-btn" type="button" class="px-3 py-2 rounded-xl font-bold transition flex items-center justify-center gap-1.5 bg-indigo-600 text-white shadow-sm">
+                  <span>🌐</span> <span>Cloud (4G/5G)</span>
+                </button>
+                <button id="transfer-mode-local-btn" type="button" class="px-3 py-2 rounded-xl font-bold transition flex items-center justify-center gap-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">
+                  <span>📶</span> <span>Local Wi-Fi</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Active URL display -->
+            <div class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800">
+              <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                <span class="text-slate-400 text-xs">🔗</span>
+                <span class="text-[11px] text-indigo-600 dark:text-indigo-400 font-mono font-bold truncate" id="page-transfer-target-url">Loading URL...</span>
+              </div>
+              <button id="page-transfer-copy-url-btn" type="button" class="px-2.5 py-1 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-indigo-600 border border-slate-200 dark:border-slate-700 font-bold transition shadow-xs flex items-center gap-1" title="Copy URL">
+                <span>📋</span> <span>Copy</span>
+              </button>
             </div>
           </div>
-          <div id="page-transfer-list" class="min-h-[120px] max-h-60 overflow-y-auto p-2.5 bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col gap-1.5 text-xs">
-            <div class="text-slate-400 text-center py-6 text-xs">No files received from customer phones yet.</div>
+
+          <!-- Quick How-It-Works Guide -->
+          <div class="p-3.5 bg-indigo-50/60 dark:bg-indigo-950/30 rounded-2xl border border-indigo-100 dark:border-indigo-900/40 flex flex-col gap-2 text-xs">
+            <span class="font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
+              <span>💡</span> <span>How Customers Connect:</span>
+            </span>
+            <ul class="text-[11px] text-slate-600 dark:text-slate-300 space-y-1.5 pl-1">
+              <li class="flex items-start gap-1.5">
+                <span class="font-bold text-indigo-600 dark:text-indigo-400">1.</span>
+                <span>Customer scans the QR code with their mobile phone camera.</span>
+              </li>
+              <li class="flex items-start gap-1.5">
+                <span class="font-bold text-indigo-600 dark:text-indigo-400">2.</span>
+                <span>Selects PDF documents, images, or homework files on mobile.</span>
+              </li>
+              <li class="flex items-start gap-1.5">
+                <span class="font-bold text-indigo-600 dark:text-indigo-400">3.</span>
+                <span>Files immediately arrive in the reception stream on the right.</span>
+              </li>
+            </ul>
           </div>
+
+          <!-- Local Intake Notice -->
+          <div class="mt-auto pt-2 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-xs">
+            <span class="text-slate-500 dark:text-slate-400">Intake Destination:</span>
+            <span class="font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-lg border border-indigo-200/50 dark:border-indigo-800/50">📁 uploads/</span>
+          </div>
+
+        </div>
+
+        <!-- RIGHT COLUMN: Live Received Files Stream & Action Panel (7 Cols) -->
+        <div class="lg:col-span-7 glass-panel p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-4">
+          
+          <!-- Stream Header -->
+          <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3 flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="text-lg">📥</span>
+              <div>
+                <h3 class="text-sm font-extrabold text-slate-800 dark:text-slate-100">Live Received Files Stream</h3>
+                <p class="text-[11px] text-slate-400">Files arrive live without refreshing</p>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <span id="page-transfer-count" class="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">0 files</span>
+              <button id="page-transfer-clear-btn" type="button" class="px-3 py-1 rounded-xl text-xs bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 font-bold transition flex items-center gap-1 border border-rose-200 dark:border-rose-900/50">
+                <span>🗑️</span> <span>Clear Stream</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Received Files Container List -->
+          <div id="page-transfer-list" class="flex-1 min-h-[380px] max-h-[580px] overflow-y-auto p-3 bg-slate-50/80 dark:bg-slate-900/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-col gap-2 text-xs">
+            <div class="flex flex-col items-center justify-center py-20 gap-3 text-center h-full">
+              <div class="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-500 dark:text-indigo-400 flex items-center justify-center text-3xl shadow-inner">
+                📥
+              </div>
+              <p class="text-slate-700 dark:text-slate-200 text-sm font-bold">No files received from customer phones yet</p>
+              <p class="text-slate-400 text-xs max-w-sm">Scan the QR code on the left with any mobile camera to send PDFs, photos, or documents instantly.</p>
+            </div>
+          </div>
+
+          <!-- Stream Footer Quick Shortcuts -->
+          <div class="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2 text-xs">
+            <div class="flex items-center gap-1.5 text-slate-400 text-[11px]">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Live polling active (Auto-sync)</span>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <button onclick="switchAppMode('merge')" class="px-3 py-1.5 rounded-xl bg-violet-50 dark:bg-violet-950/60 hover:bg-violet-100 text-violet-700 dark:text-violet-300 font-bold text-xs transition flex items-center gap-1 border border-violet-200 dark:border-violet-900/50">
+                <span>✨</span> <span>Open Merge Studio</span>
+              </button>
+              <button onclick="switchAppMode('print')" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition flex items-center gap-1">
+                <span>📚</span> <span>Document Explorer</span>
+              </button>
+            </div>
+          </div>
+
         </div>
 
       </div>
@@ -2524,7 +2616,7 @@
 
   <!-- MODAL 6: Direct Mobile-to-PC File Receiver via QR Code -->
   <div id="file-transfer-modal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl flex flex-col items-center gap-4 text-center">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-2xl w-full shadow-2xl flex flex-col gap-4">
       
       <div class="flex items-center justify-between w-full border-b border-slate-200/60 dark:border-slate-800 pb-3">
         <div class="flex items-center gap-2 text-left">
@@ -2534,43 +2626,49 @@
             <p class="text-[11px] text-slate-400">Scanner avec l'appareil photo du téléphone pour envoyer directement</p>
           </div>
         </div>
-        <button id="close-transfer-modal-btn" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">✕</button>
+        <button id="close-transfer-modal-btn" class="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg transition">✕</button>
       </div>
 
-      <!-- Live Dynamic QR Display for Mobile Connection -->
-      <div class="p-4 bg-white rounded-3xl border border-indigo-100 shadow-md flex items-center justify-center">
-        <div id="transfer-qr-canvas"></div>
-      </div>
-
-      <!-- Live Real-Time Connection / Reception Status Badge -->
-      <div id="transfer-status-badge" class="px-4 py-1.5 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-2 animate-pulse">
-        <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
-        <span id="transfer-status-text">En attente de connexion du téléphone...</span>
-      </div>
-
-      <!-- Target Storage Location Notice -->
-      <div class="w-full p-3 bg-indigo-50/70 dark:bg-indigo-950/40 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-between text-xs text-left">
-        <div>
-          <span class="font-bold text-indigo-900 dark:text-indigo-200">Dossier Unique de Réception :</span>
-          <p class="font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">📁 uploads/ (Indépendant des cours)</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+        <!-- Live Dynamic QR Display for Mobile Connection -->
+        <div class="flex flex-col items-center gap-2">
+          <div class="p-3 bg-white rounded-3xl border border-indigo-100 shadow-md flex items-center justify-center">
+            <div id="transfer-qr-canvas"></div>
+          </div>
+          <!-- Target Storage Location Notice -->
+          <div class="w-full p-2.5 bg-indigo-50/70 dark:bg-indigo-950/40 rounded-xl border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-between text-xs text-left">
+            <div>
+              <span class="font-bold text-[11px] text-indigo-900 dark:text-indigo-200">Dossier de Réception :</span>
+              <p class="font-mono text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">📁 uploads/</p>
+            </div>
+            <button id="transfer-open-portal-btn" type="button" class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold shadow-sm" title="Tester sur ce navigateur">
+              Tester ↗
+            </button>
+          </div>
         </div>
-        <button id="transfer-open-portal-btn" type="button" class="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold shadow-sm" title="Tester sur ce navigateur">
-          Tester ↗
-        </button>
-      </div>
 
-      <!-- Received Files Live List (Shown when files arrive) -->
-      <div id="transfer-received-box" class="hidden w-full flex flex-col gap-2 text-left">
-        <div class="flex items-center justify-between text-xs font-bold text-emerald-600 dark:text-emerald-400">
-          <span>✅ Fichiers reçus avec succès :</span>
-          <span id="transfer-received-count" class="font-mono">0</span>
+        <!-- Right Side: Status and Live Received Files -->
+        <div class="flex flex-col gap-3 h-full justify-between">
+          <!-- Live Real-Time Connection / Reception Status Badge -->
+          <div id="transfer-status-badge" class="px-3.5 py-2 rounded-2xl text-xs font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-2 animate-pulse">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+            <span id="transfer-status-text">En attente de connexion du téléphone...</span>
+          </div>
+
+          <!-- Received Files Live List (Shown when files arrive) -->
+          <div id="transfer-received-box" class="hidden w-full flex-1 flex flex-col gap-1.5 text-left">
+            <div class="flex items-center justify-between text-xs font-bold text-emerald-600 dark:text-emerald-400">
+              <span>✅ Fichiers reçus :</span>
+              <span id="transfer-received-count" class="font-mono">0</span>
+            </div>
+            <div id="transfer-received-list" class="max-h-36 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col gap-1 text-xs"></div>
+          </div>
+
+          <p class="text-[11px] text-slate-400 leading-relaxed text-left bg-slate-50 dark:bg-slate-800/40 p-3 rounded-2xl border border-slate-200/60 dark:border-slate-800">
+            Fonctionne sur <strong>4G/5G ou Wi-Fi</strong>. Aucun compte ni application requise sur le téléphone du client.
+          </p>
         </div>
-        <div id="transfer-received-list" class="max-h-32 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col gap-1 text-xs"></div>
       </div>
-
-      <p class="text-[11px] text-slate-400 leading-relaxed">
-        Fonctionne sur <strong>n'importe quel réseau (4G/5G, Wi-Fi, ou hors réseau local)</strong>. Aucun compte ni application requise sur le téléphone du client.
-      </p>
 
     </div>
   </div>

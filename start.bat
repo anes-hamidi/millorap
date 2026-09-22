@@ -1,6 +1,7 @@
 @echo off
 title Millora - Demarrage
 color 0A
+cd /d "%~dp0"
 echo.
 echo  =========================================
 echo   Millora Print ^& POS - Demarrage
@@ -77,5 +78,10 @@ echo.
 echo  Millora demarre sur http://localhost:3000
 echo  Ctrl+C pour arreter.
 echo.
+
+:: Ouvrir automatiquement l'application dans le navigateur (Mode Application PWA)
+start "" cmd /c "timeout /t 2 /nobreak >nul & start msedge --app=http://localhost:3000 2>nul || start http://localhost:3000"
+
 node server.js
 pause
+

@@ -98,11 +98,11 @@ const WORKSPACES = {
   }
 };
 
-let currentWorkspace = 'pos';
+let currentWorkspace = 'transfer';
 
 // Main Workspace Navigation Switcher
 function switchAppMode(targetMode) {
-  if (!WORKSPACES[targetMode]) targetMode = 'pos';
+  if (!WORKSPACES[targetMode]) targetMode = 'transfer';
   currentWorkspace = targetMode;
 
   const meta = WORKSPACES[targetMode];
@@ -773,11 +773,11 @@ function updateTransferQrDisplay() {
   const localBtn = document.getElementById('transfer-mode-local-btn');
   if (cloudBtn && localBtn) {
     if (activeTransferNetworkMode === 'cloud' && cachedCloudHost) {
-      cloudBtn.className = 'px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 bg-indigo-600 text-white shadow-sm';
-      localBtn.className = 'px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white';
+      cloudBtn.className = 'px-3 py-2 rounded-xl font-bold transition flex items-center justify-center gap-1.5 bg-indigo-600 text-white shadow-sm';
+      localBtn.className = 'px-3 py-2 rounded-xl font-bold transition flex items-center justify-center gap-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white';
     } else {
-      localBtn.className = 'px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 bg-indigo-600 text-white shadow-sm';
-      cloudBtn.className = 'px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white';
+      localBtn.className = 'px-3 py-2 rounded-xl font-bold transition flex items-center justify-center gap-1.5 bg-indigo-600 text-white shadow-sm';
+      cloudBtn.className = 'px-3 py-2 rounded-xl font-bold transition flex items-center justify-center gap-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white';
     }
   }
 
@@ -946,10 +946,12 @@ async function renderTransferDropZoneWorkspace() {
 
       if (files.length === 0) {
         listEl.innerHTML = `
-          <div class="flex flex-col items-center justify-center py-10 gap-2 text-center">
-            <span class="text-3xl">📲</span>
-            <p class="text-slate-500 dark:text-slate-400 text-xs font-semibold">No files received yet.</p>
-            <p class="text-slate-400 text-[11px]">Ask the customer to scan the QR code above to upload files.</p>
+          <div class="flex flex-col items-center justify-center py-20 gap-3 text-center h-full">
+            <div class="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-500 dark:text-indigo-400 flex items-center justify-center text-3xl shadow-inner">
+              📥
+            </div>
+            <p class="text-slate-700 dark:text-slate-200 text-sm font-bold">No files received from customer phones yet</p>
+            <p class="text-slate-400 text-xs max-w-sm">Scan the QR code on the left with any mobile camera to send PDFs, photos, or documents instantly.</p>
           </div>`;
         return;
       }
@@ -964,21 +966,21 @@ async function renderTransferDropZoneWorkspace() {
         const safe    = escapeHtml(f.name);
         const safeUrl = escapeHtml(f.url);
 
-        return `<div class="p-2.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center gap-3 shadow-sm hover:border-indigo-300 dark:hover:border-indigo-600 transition group" data-file-idx="${idx}">
+        return `<div class="p-3 bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/90 dark:border-slate-700/80 flex items-center gap-3.5 shadow-sm hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-md transition group" data-file-idx="${idx}">
   <span class="text-2xl shrink-0 select-none">${icon}</span>
   <div class="flex flex-col min-w-0 flex-1">
     <span class="font-bold text-slate-800 dark:text-slate-100 truncate text-xs leading-tight" title="${safe}">${safe}</span>
     <span class="text-[10px] text-slate-400 font-mono mt-0.5">${sizeFmt} &nbsp;•&nbsp; ${when}</span>
   </div>
-  <div class="flex items-center gap-1.5 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
+  <div class="flex items-center gap-1.5 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
     <a href="${safeUrl}" target="_blank"
-       class="px-2.5 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold text-[11px] hover:bg-indigo-100 transition"
+       class="px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 font-bold text-xs hover:bg-indigo-100 dark:hover:bg-indigo-900/80 transition shadow-sm"
        title="Open / Print">View ↗</a>${isPdf ? `
     <button data-merge-idx="${idx}"
-            class="px-2.5 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 font-bold text-[11px] hover:bg-violet-100 transition"
+            class="px-3 py-1.5 rounded-xl bg-violet-50 dark:bg-violet-950/80 text-violet-600 dark:text-violet-400 font-bold text-xs hover:bg-violet-100 dark:hover:bg-violet-900/80 transition shadow-sm"
             title="Send to Merge Studio">Merge ✨</button>` : ''}
     <button data-delete-idx="${idx}"
-            class="p-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/60 text-rose-400 hover:text-rose-500 transition"
+            class="p-2 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/60 text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 transition"
             title="Delete file from uploads">
       <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="3 6 5 6 21 6"></polyline>
@@ -1865,21 +1867,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Start Live System Clock
   startLiveClock();
 
-  // Keyboard Shortcuts (F1: POS, F2: Inventory, F3: Analytics, F4: Print Hub)
+  // Keyboard Shortcuts (F1: Mobile Transfer Drop, F2: POS, F3: Inventory, F4: Analytics, F5: Print Hub, F6: Merge, F7: QR, F8: Debts)
   document.addEventListener('keydown', (e) => {
     if (e.key === 'F1') {
       e.preventDefault();
-      switchAppMode('pos');
+      switchAppMode('transfer');
     } else if (e.key === 'F2') {
       e.preventDefault();
-      switchAppMode('inventory');
+      switchAppMode('pos');
     } else if (e.key === 'F3') {
       e.preventDefault();
-      switchAppMode('analytics');
+      switchAppMode('inventory');
     } else if (e.key === 'F4') {
       e.preventDefault();
-      switchAppMode('debts');
-
+      switchAppMode('analytics');
     } else if (e.key === 'F5') {
       e.preventDefault();
       switchAppMode('print');
@@ -1888,10 +1889,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       switchAppMode('merge');
     } else if (e.key === 'F7') {
       e.preventDefault();
-      switchAppMode('transfer');
+      switchAppMode('qr');
     } else if (e.key === 'F8') {
       e.preventDefault();
-      switchAppMode('qr');
+      switchAppMode('debts');
     }  
 
   });
@@ -1954,8 +1955,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     executeStudioMerge('save');
   });
 
-  // Default to POS Workspace immediately for instant UI responsiveness
-  switchAppMode('pos');
+  // Default to Mobile Transfer DropZone Workspace immediately for instant UI responsiveness
+  switchAppMode('transfer');
 
   // Initialize Core Modules Asynchronously
   try {
