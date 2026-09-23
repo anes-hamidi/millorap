@@ -16,6 +16,34 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 const transferSessions = new Map();
 const SESSION_TTL_MS = 15 * 60 * 1000; // 15 minutes TTL
 
+// HTML escaping helper to prevent Reflected XSS
+function escapeHtml(str) {
+  return String(str || '').replace(/[&<>"']/g, m => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[m]));
+}
+
+// Periodic cleanup of expired transfer sessions to prevent memory leaks
+const transferCleanupInterval = setInterval(() => {
+  const now = Date.now();
+  for (const [key, session] of transferSessions.entries()) {
+    if (session.expiresAt && now > session.expiresAt) {
+      transferSessions.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
+if (transferCleanupInterval.unref) transferCleanupInterval.unref();
+
+// Helper to check if request originates from localhost / authorized operator
+function isLocalhostRequest(req) {
+  const ip = req.ip || req.socket.remoteAddress || '';
+  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1' || ip.endsWith('127.0.0.1');
+}
+
 // Multer storage engine saving directly to unique 'uploads' directory
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -57,30 +85,32 @@ function getOrCreateSession(sessionId, existingToken = null) {
       lastUpdated: now
     };
     transferSessions.set(sessionId, session);
-  } else if (existingToken && session.token !== existingToken) {
-    session.token = existingToken;
+  } else if (session.expiresAt && now > session.expiresAt) {
+    session.token = existingToken || crypto.randomBytes(16).toString('hex');
     session.expiresAt = now + SESSION_TTL_MS;
+    session.files = [];
+    session.lastUpdated = now;
   }
   return session;
 }
 
 // GET /transfer?session=TR-XXXXXX&token=YYYYYY (Page opened by scanning QR with Mobile Phone)
 router.get('/transfer', (req, res) => {
-  const sessionId = req.query.session || ('TR-' + Date.now().toString().slice(-6));
-  const token = req.query.token || crypto.randomBytes(16).toString('hex');
-  const store = req.query.store || 'Millora Print & POS';
+  const sessionId = String(req.query.session || ('TR-' + Date.now().toString().slice(-6))).slice(0, 64);
+  const token = String(req.query.token || crypto.randomBytes(16).toString('hex')).slice(0, 64);
+  const store = String(req.query.store || 'Millora Print & POS').slice(0, 80);
 
   // Register session with 15-minute expiration
-  getOrCreateSession(sessionId, token);
+  const session = getOrCreateSession(sessionId, token);
 
   try {
     let html = fs.readFileSync(TRANSFER_TEMPLATE_PATH, 'utf8');
-    html = html.replace(/{{STORE}}/g, store)
-               .replace(/{{SESSION_ID}}/g, sessionId)
-               .replace(/{{TOKEN}}/g, token);
+    html = html.replace(/{{STORE}}/g, escapeHtml(store))
+               .replace(/{{SESSION_ID}}/g, escapeHtml(sessionId))
+               .replace(/{{TOKEN}}/g, escapeHtml(session.token));
     res.send(html);
   } catch (err) {
-    res.status(500).send('Erreur lors du chargement de la page de transfert: ' + err.message);
+    res.status(500).send('Erreur lors du chargement de la page de transfert: ' + escapeHtml(err.message));
   }
 });
 
@@ -202,6 +232,9 @@ router.get('/transfer/files', (req, res) => {
 
 // DELETE /api/transfer/files/:filename (Deletes a specific uploaded file)
 router.delete('/transfer/files/:filename', (req, res) => {
+  if (!isLocalhostRequest(req)) {
+    return res.status(403).json({ success: false, error: 'Access denied: Localhost only' });
+  }
   try {
     const filename = path.basename(req.params.filename);
     const fullPath = path.join(UPLOADS_DIR, filename);
@@ -219,6 +252,9 @@ router.delete('/transfer/files/:filename', (req, res) => {
 
 // POST /api/transfer/clear (Clears all files in uploads directory)
 router.post('/transfer/clear', (req, res) => {
+  if (!isLocalhostRequest(req)) {
+    return res.status(403).json({ success: false, error: 'Access denied: Localhost only' });
+  }
   try {
     if (!fs.existsSync(UPLOADS_DIR)) {
       return res.json({ success: true, count: 0 });

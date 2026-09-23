@@ -679,7 +679,8 @@
 
     try {
       if (idStr) {
-        const id = isNaN(Number(idStr)) ? idStr : (idStr.length < 10 ? parseInt(idStr, 10) : idStr);
+        const numericId = Number(idStr);
+        const id = isNaN(numericId) ? idStr : numericId;
         const existing = await db.products.get(id);
         const prevStock = existing ? existing.currentStock : currentStock;
 
@@ -735,7 +736,8 @@
     const idStr = document.getElementById('product-form-id').value;
     if (!idStr || !window.FlexiDB?.db) return;
     if (confirm('Are you sure you want to remove this product from inventory?')) {
-      const id = parseInt(idStr, 10) || idStr;
+      const numericId = Number(idStr);
+      const id = isNaN(numericId) ? idStr : numericId;
       await window.FlexiDB.db.products.delete(id);
       showToast('Product removed from inventory');
       await loadPosProducts();

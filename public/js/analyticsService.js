@@ -47,8 +47,8 @@
 
       // Filter active batches with positive quantity and upcoming/past expiry
       const activeBatches = allBatches.filter(b => {
-        const qty = Number(b.quantity) || 0;
-        if (qty <= 0) return false;
+const qty = Number(b.remainingQty != null ? b.remainingQty : 
+  (b.quantity != null ? b.quantity : b.initialQty)) || 0;        if (qty <= 0) return false;
         if (!b.expiryDate) return false;
         const exp = new Date(b.expiryDate);
         return exp <= targetDate;
@@ -71,6 +71,8 @@
         // Tier classification: red for <= 3 days / expired, amber for 4-7 days
         const severity = daysRemaining <= 3 ? 'red' : 'amber';
 
+        const batchQty = Number(b.remainingQty != null ? b.remainingQty : (b.quantity != null ? b.quantity : b.initialQty)) || 0;
+
         return {
           id: b.id,
           batchId: b.id,
@@ -79,7 +81,8 @@
           barcode: p.barcode || '',
           category: p.category || 'Général',
           icon: p.icon || '📦',
-          quantity: Number(b.quantity) || 0,
+          quantity: batchQty,
+          remainingQty: batchQty,
           expiryDate: b.expiryDate,
           receivedAt: b.receivedAt,
           daysRemaining: daysRemaining,

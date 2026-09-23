@@ -337,7 +337,10 @@
         const newSellingPrice = Number(rec.sellingPrice) > 0 ? Number(rec.sellingPrice) : null;
 
         if (prod) {
-          await d.products.where('id').equals(prod.id).modify(p => {
+          const numericProdId = Number(prod.id);
+          const targetProdId = isNaN(numericProdId) ? prod.id : numericProdId;
+
+          await d.products.where('id').equals(targetProdId).modify(p => {
             p.currentStock = (Number(p.currentStock) || 0) + newReceivedNow;
             if (newCost > 0) {
               p.costPrice = newCost;
@@ -349,9 +352,11 @@
           });
         }
 
+        const resolvedProdId = prod ? (isNaN(Number(prod.id)) ? prod.id : Number(prod.id)) : (isNaN(Number(item.productId)) ? item.productId : Number(item.productId));
+
         // 2. Add RESTOCK entry in stockLogs for complete audit trail
         await d.stockLogs.add({
-          productId: prod ? prod.id : item.productId,
+          productId: resolvedProdId,
           timestamp: now,
           type: 'RESTOCK',
           quantityChange: newReceivedNow,
@@ -361,12 +366,13 @@
           note: `Réception BC #${po.orderRef || po.id} (${supplierName})`
         });
 
-        // 3. If expiry date is specified, create batch record in db.batches
+        // 3. If expiry date is specified, create batch record in db.batches (saving both quantity and remainingQty)
         if (rec.expiryDate && d.batches) {
           await d.batches.add({
-            productId: prod ? prod.id : item.productId,
+            productId: resolvedProdId,
             batchNumber: rec.batchNumber || `LOT-${Date.now().toString().slice(-4)}`,
             expiryDate: rec.expiryDate,
+            quantity: newReceivedNow,
             initialQty: newReceivedNow,
             remainingQty: newReceivedNow,
             poId: po.id,

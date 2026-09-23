@@ -10,6 +10,28 @@ const PAY_TEMPLATE_PATH = path.join(__dirname, '..', 'views', 'pay.html');
 const payments = new Map();
 const PAYMENT_SESSION_TTL_MS = 15 * 60 * 1000; // 15 minutes TTL
 
+// HTML escaping helper to prevent Reflected XSS
+function escapeHtml(str) {
+  return String(str || '').replace(/[&<>"']/g, m => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[m]));
+}
+
+// Periodic cleanup of expired payment sessions to prevent memory leaks
+const paymentCleanupInterval = setInterval(() => {
+  const now = Date.now();
+  for (const [key, session] of payments.entries()) {
+    if (session.expiresAt && now > session.expiresAt) {
+      payments.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
+if (paymentCleanupInterval.unref) paymentCleanupInterval.unref();
+
 function getOrCreatePaymentSession(orderId, amount = 0, existingToken = null) {
   const now = Date.now();
   let payment = payments.get(orderId);
@@ -24,32 +46,36 @@ function getOrCreatePaymentSession(orderId, amount = 0, existingToken = null) {
       createdAt: new Date().toISOString()
     };
     payments.set(orderId, payment);
-  } else if (existingToken && payment.token !== existingToken) {
-    payment.token = existingToken;
+  } else if (payment.expiresAt && now > payment.expiresAt) {
+    // Renew expired session securely
+    payment.token = existingToken || crypto.randomBytes(16).toString('hex');
     payment.expiresAt = now + PAYMENT_SESSION_TTL_MS;
+    payment.status = 'PENDING';
+    payment.amount = parseFloat(amount || payment.amount || 0);
   }
+  // Active session tokens cannot be overwritten by unauthorized callers
   return payment;
 }
 
 // GET /pay?amount=XXX&order=DZ-XXX&token=YYYYYY (Customer-facing payment portal)
 router.get('/pay', (req, res) => {
-  const amount = parseFloat(req.query.amount || 0).toFixed(2);
-  const orderId = req.query.order || ('DZ-' + Date.now());
-  const token = req.query.token || crypto.randomBytes(16).toString('hex');
-  const store = req.query.store || 'Millora Store Alger';
+  const amount = Math.max(0, parseFloat(req.query.amount || 0)).toFixed(2);
+  const orderId = String(req.query.order || ('DZ-' + Date.now())).slice(0, 64);
+  const token = String(req.query.token || crypto.randomBytes(16).toString('hex')).slice(0, 64);
+  const store = String(req.query.store || 'Millora Store Alger').slice(0, 80);
 
   // Register payment intent session with token & TTL
-  getOrCreatePaymentSession(orderId, amount, token);
+  const session = getOrCreatePaymentSession(orderId, amount, token);
 
   try {
     let html = fs.readFileSync(PAY_TEMPLATE_PATH, 'utf8');
-    html = html.replace(/{{STORE}}/g, store)
-               .replace(/{{AMOUNT}}/g, amount)
-               .replace(/{{ORDER_ID}}/g, orderId)
-               .replace(/{{TOKEN}}/g, token);
+    html = html.replace(/{{STORE}}/g, escapeHtml(store))
+               .replace(/{{AMOUNT}}/g, escapeHtml(amount))
+               .replace(/{{ORDER_ID}}/g, escapeHtml(orderId))
+               .replace(/{{TOKEN}}/g, escapeHtml(session.token));
     res.send(html);
   } catch (err) {
-    res.status(500).send('Erreur lors du chargement du portail de paiement: ' + err.message);
+    res.status(500).send('Erreur lors du chargement du portail de paiement: ' + escapeHtml(err.message));
   }
 });
 

@@ -43,20 +43,22 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 
 // Security check helper to prevent path traversal
 function getSafePath(relativePath) {
-  const safeRelativePath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, '');
+  const safeRelativePath = path.normalize(relativePath || '').replace(/^(\.\.[\/\\])+/, '');
 
   // If path refers to uploads folder or subfolder
   if (safeRelativePath === 'uploads' || safeRelativePath.startsWith('uploads/') || safeRelativePath.startsWith('uploads\\')) {
     const sub = safeRelativePath.replace(/^uploads[\/\\]?/, '');
     const fullPath = path.join(UPLOADS_DIR, sub);
-    if (!fullPath.startsWith(path.resolve(UPLOADS_DIR))) {
+    const rel = path.relative(path.resolve(UPLOADS_DIR), path.resolve(fullPath));
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
       throw new Error('Access denied: Invalid path traversal attempt');
     }
     return fullPath;
   }
 
   const fullPath = path.join(EFFECTIVE_DOCS_DIR, safeRelativePath);
-  if (!fullPath.startsWith(path.resolve(EFFECTIVE_DOCS_DIR))) {
+  const rel = path.relative(path.resolve(EFFECTIVE_DOCS_DIR), path.resolve(fullPath));
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
     throw new Error('Access denied: Invalid path traversal attempt');
   }
   return fullPath;
@@ -341,8 +343,10 @@ router.post('/merge', async (req, res) => {
       const destFullPath = path.join(folderFull, cleanName);
       // Ensure target path is safe (within documents dir or uploads dir)
       const resolvedDest = path.resolve(destFullPath);
-      const isDocs = resolvedDest.startsWith(path.resolve(EFFECTIVE_DOCS_DIR));
-      const isUploads = resolvedDest.startsWith(path.resolve(UPLOADS_DIR));
+      const relDocs = path.relative(path.resolve(EFFECTIVE_DOCS_DIR), resolvedDest);
+      const relUploads = path.relative(path.resolve(UPLOADS_DIR), resolvedDest);
+      const isDocs = !relDocs.startsWith('..') && !path.isAbsolute(relDocs);
+      const isUploads = !relUploads.startsWith('..') && !path.isAbsolute(relUploads);
       if (!isDocs && !isUploads) {
         throw new Error('Access denied: Invalid target folder');
       }

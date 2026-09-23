@@ -28,19 +28,30 @@
     const orderRef = 'DZ-' + terminalId + '-' + Date.now().toString(36) + '-' + Math.floor(100 + Math.random() * 900);
     const timestamp = new Date().toISOString();
 
+    // Stores participating in atomic transaction
+    const txStores = [db.products, db.sales, db.saleItems, db.stockLogs];
+    if (db.batches) txStores.push(db.batches);
+
     // Execute atomic IndexedDB transaction across all stores
-    return await db.transaction('rw', db.products, db.sales, db.saleItems, db.stockLogs, async () => {
+    return await db.transaction('rw', txStores, async () => {
       // 1. Fetch fresh state of all products in cart & lock/validate stock
-      const productIds = items.map(i => i.id);
+      const productIds = items.map(i => {
+        const num = Number(i.id);
+        return isNaN(num) ? i.id : num;
+      });
       const freshProducts = await db.products.where('id').anyOf(productIds).toArray();
-      const productMap = new Map(freshProducts.map(p => [p.id, p]));
+      const productMap = new Map();
+      freshProducts.forEach(p => {
+        productMap.set(p.id, p);
+        productMap.set(String(p.id), p);
+      });
 
       let subtotal = 0;
       let totalCost = 0;
       const validatedLineItems = [];
 
       for (const item of items) {
-        const product = productMap.get(item.id);
+        const product = productMap.get(item.id) || productMap.get(Number(item.id));
 
         if (!product) {
           throw new Error('Product with ID ' + item.id + ' was not found in inventory.');
@@ -114,20 +125,50 @@
       // Proportionally adjust cost / net profit with discount
       const netProfit = totalAmount - totalCost;
 
-      // 2. Relative stock decrement (Task 1) & audit log creation
+      // 2. Relative stock decrement & FIFO batch depletion & audit log creation
       for (const line of validatedLineItems) {
         const prevStock = line.product.currentStock;
         const newStock = prevStock - line.baseQuantity;
+        const numericProdId = Number(line.productId);
+        const targetProdId = isNaN(numericProdId) ? line.productId : numericProdId;
 
         // Multi-register race-condition safe relative stock decrement
-        await db.products.where('id').equals(line.productId).modify(p => {
+        await db.products.where('id').equals(targetProdId).modify(p => {
           p.currentStock = (Number(p.currentStock) || 0) - line.baseQuantity;
           p.updatedAt = timestamp;
         });
 
+        // FIFO Depletion of perishable batches (if batches store exists)
+        if (db.batches) {
+          let qtyToDeplete = line.baseQuantity;
+          const allBatches = await db.batches.toArray();
+          const productBatches = allBatches.filter(b => 
+            b.productId === targetProdId || String(b.productId) === String(targetProdId)
+          );
+
+          // Sort batches by expiryDate ascending (soonest expiring first)
+          productBatches.sort((a, b) => (a.expiryDate || '').localeCompare(b.expiryDate || ''));
+
+          for (const batch of productBatches) {
+            if (qtyToDeplete <= 0) break;
+            const currentBatchQty = Number(batch.remainingQty != null ? batch.remainingQty : (batch.quantity != null ? batch.quantity : 0));
+            if (currentBatchQty <= 0) continue;
+
+            const deduct = Math.min(currentBatchQty, qtyToDeplete);
+            const updatedQty = currentBatchQty - deduct;
+            qtyToDeplete -= deduct;
+
+            await db.batches.update(batch.id, {
+              remainingQty: updatedQty,
+              quantity: updatedQty,
+              updatedAt: timestamp
+            });
+          }
+        }
+
         // Insert stock movement log
         await db.stockLogs.add({
-          productId: line.productId,
+          productId: targetProdId,
           timestamp,
           type: 'SALE',
           quantityChange: -line.baseQuantity,

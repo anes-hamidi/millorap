@@ -3113,6 +3113,14 @@
         console.warn('[Self-Healing] Forcing product catalog fetch & render...');
         if (window.loadPosProducts) {
           window.loadPosProducts();
+        } else if (window.POS && window.POS.loadProducts) {
+          window.POS.loadProducts();
+        } else if (window.FlexiDB && window.FlexiDB.db && window.FlexiDB.db.isOpen()) {
+          window.FlexiDB.db.products.toArray().then(function(prods) {
+            if (prods && prods.length && window.renderPosProducts) {
+              window.renderPosProducts(prods);
+            }
+          }).catch(function(e) { console.error('Self-healing Dexie read failed:', e); });
         } else {
           fetch('/api/pos/products')
             .then(function(r) { return r.json(); })
