@@ -4,7 +4,9 @@
   "description": "",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node tests/scan_iq.test.js",
+    "train:supplier": "node scripts/train_supplier_classifier.js",
+    "push": "git add -A && git commit -m \"feat(scaniq): implement intelligent offline invoice scanner with Stirling/Paperless architecture\" && git push origin main",
     "start": "node server.js",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",

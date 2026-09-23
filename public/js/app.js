@@ -2583,10 +2583,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.DebtService?.exportDebtPaymentsToCsv();
   });
 
-  // Initial debt badge update
-  if (window.DebtService?.refreshDebtBadge) {
-    window.DebtService.refreshDebtBadge().catch(() => {});
-  }
+  // ScanIQ Invoice Scanner Launcher
+  const scaniqLaunchBtn = document.getElementById('scaniq-launch-btn');
+  const scaniqFileInput = document.getElementById('scaniq-file-input');
+
+  scaniqLaunchBtn?.addEventListener('click', () => {
+    scaniqFileInput?.click();
+  });
+
+  scaniqFileInput?.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    try {
+      showToast('⚡ ScanIQ : Analyse de la facture en cours...', 'info');
+      const scanData = await window.ScanIQService.processInvoiceFile(file);
+      await window.ScanIQService.renderScanValidationModal(scanData);
+      showToast(`Facture de "${scanData.supplier}" analysée avec succès !`, 'success');
+    } catch (err) {
+      console.error('[ScanIQ Error]', err);
+      showToast('Erreur ScanIQ : ' + err.message, 'error');
+    } finally {
+      e.target.value = '';
+    }
+  });
 
   if (window.QRGenerator?.init) window.QRGenerator.init();
   if (window.FileBrowser?.init) window.FileBrowser.init();

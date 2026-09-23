@@ -18,12 +18,14 @@ const filesRouter = require('./routes/files');
 const posRouter = require('./routes/pos');
 const payRouter = require('./routes/pay');
 const transferRouter = require('./routes/transfer');
+const scanRouter = require('./routes/scan');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(express.json());
+// Middleware with higher body size limit for offline invoice document payloads
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // Enable CORS for Tauri desktop app & LAN requests
 app.use((req, res, next) => {
@@ -43,6 +45,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api', filesRouter);
 app.use('/api/pos', posRouter);
 app.use('/api', posRouter);
+app.use('/api/scan', scanRouter);
+app.use('/scan', scanRouter);
 app.use('/api', transferRouter);
 app.use('/', transferRouter);
 app.use('/', payRouter);
