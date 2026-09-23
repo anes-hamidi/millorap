@@ -633,6 +633,26 @@
       deleteBtn.classList.add('hidden');
     }
 
+    // Dynamically populate all available categories
+    const catSelect = document.getElementById('product-form-category');
+    if (catSelect && window.FlexiDB && window.FlexiDB.getAllCategories) {
+      window.FlexiDB.getAllCategories().then(cats => {
+        if (cats && cats.length > 0) {
+          const targetCat = productToEdit ? productToEdit.category : catSelect.value;
+          catSelect.innerHTML = cats.map(c => `<option value="${escapeHtml(c.name)}">${c.icon ? c.icon + ' ' : ''}${escapeHtml(c.name)}</option>`).join('');
+          if (targetCat) {
+            if (!cats.some(c => c.name === targetCat)) {
+              const opt = document.createElement('option');
+              opt.value = targetCat;
+              opt.textContent = targetCat;
+              catSelect.appendChild(opt);
+            }
+            catSelect.value = targetCat;
+          }
+        }
+      }).catch(() => {});
+    }
+
     modal.classList.remove('hidden');
   };
 

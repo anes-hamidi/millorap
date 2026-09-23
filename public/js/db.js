@@ -59,6 +59,15 @@
   }
 
   const DEFAULT_SEED_CATEGORIES = [
+    { name: 'Boissons & Confiserie', icon: '🧃', createdAt: new Date().toISOString() },
+    { name: 'Produits Laitiers & Frais', icon: '🧀', createdAt: new Date().toISOString() },
+    { name: 'Épicerie & Alimentation Générale', icon: '🥫', createdAt: new Date().toISOString() },
+    { name: 'High-Tech & Accessoires', icon: '🎧', createdAt: new Date().toISOString() },
+    { name: 'Hygiène, Beauté & Soins', icon: '🧴', createdAt: new Date().toISOString() },
+    { name: 'Entretien & Ménage', icon: '🧹', createdAt: new Date().toISOString() },
+    { name: 'Bébé & Maternité', icon: '👶', createdAt: new Date().toISOString() },
+    { name: 'Papeterie, Bazar & Maison', icon: '📦', createdAt: new Date().toISOString() },
+    { name: 'Alimentation & Bazar Général', icon: '🛒', createdAt: new Date().toISOString() },
     { name: 'Beverage', icon: '☕', createdAt: new Date().toISOString() },
     { name: 'Bakery', icon: '🥐', createdAt: new Date().toISOString() },
     { name: 'Printing', icon: '📄', createdAt: new Date().toISOString() },
@@ -232,16 +241,39 @@
         await db.open();
       }
 
+      // Auto-seed default categories if empty
+      const catCount = await db.categories.count();
+      if (catCount === 0) {
+        await db.categories.bulkAdd(DEFAULT_SEED_CATEGORIES);
+      }
+
       // Auto-seed default products if empty
       const prodCount = await db.products.count();
       if (prodCount === 0) {
         await db.products.bulkAdd(DEFAULT_SEED_PRODUCTS);
       }
 
-      // Auto-seed default categories if empty
-      const catCount = await db.categories.count();
-      if (catCount === 0) {
-        await db.categories.bulkAdd(DEFAULT_SEED_CATEGORIES);
+      // Progressively stream and seed full 42,010 Algeria Supermarket Catalog into IndexedDB
+      if (typeof window !== 'undefined' && typeof fetch === 'function') {
+        setTimeout(async () => {
+          try {
+            const currentCount = await db.products.count();
+            if (currentCount < 1000) {
+              console.log('[FlexiDB] Initializing background Algeria Supermarket catalog import (42,010 items)...');
+              await importAlgeriaSupermarketCatalog((prog) => {
+                if (prog.inserted % 5000 === 0 || prog.percentage === 100) {
+                  console.log(`[FlexiDB Catalog Import] Progress: ${prog.percentage}% (${prog.inserted}/${prog.total})`);
+                }
+              });
+              console.log('[FlexiDB] Full Algeria Supermarket catalog ready in IndexedDB.');
+              if (window.dispatchEvent) {
+                window.dispatchEvent(new CustomEvent('catalog-updated'));
+              }
+            }
+          } catch (importErr) {
+            console.warn('[FlexiDB] Background catalog stream notice:', importErr.message);
+          }
+        }, 1500);
       }
 
       // Auto-seed default customers & debts if empty
