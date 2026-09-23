@@ -543,6 +543,80 @@
     };
   }
 
+  async function importAlgeriaSupermarketCatalog(onProgress) {
+    if (!db.isOpen()) await db.open();
+    try {
+      const response = await fetch('/data/algeria_supermarket_products.json');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: Failed to fetch catalog`);
+      }
+      const products = await response.json();
+      if (!Array.isArray(products)) {
+        throw new Error('Invalid catalog format');
+      }
+
+      const total = products.length;
+      const chunkSize = 1000;
+      let inserted = 0;
+
+      // Ensure categories exist
+      const uniqueCategories = new Map();
+      for (const p of products) {
+        if (p.category && !uniqueCategories.has(p.category)) {
+          uniqueCategories.set(p.category, p.icon || '📦');
+        }
+      }
+
+      for (const [catName, icon] of uniqueCategories.entries()) {
+        const exists = await db.categories.where('name').equalsIgnoreCase(catName).first();
+        if (!exists) {
+          await db.categories.add({
+            name: catName,
+            icon: icon,
+            createdAt: new Date().toISOString()
+          });
+        }
+      }
+
+      // Chunked bulk put into db.products
+      for (let i = 0; i < total; i += chunkSize) {
+        const chunk = products.slice(i, i + chunkSize);
+        
+        await db.transaction('rw', db.products, async () => {
+          for (const item of chunk) {
+            const { tva, vat, ...cleanItem } = item; // Explicitly ensure zero TVA
+            const normalizedItem = {
+              ...cleanItem,
+              currentStock: Number(cleanItem.currentStock) || 50,
+              lowStockThreshold: Number(cleanItem.lowStockThreshold) || 10,
+              costPrice: Number(cleanItem.costPrice) || 0,
+              sellingPrice: Number(cleanItem.sellingPrice) || 0,
+              unitsPerPack: Number(cleanItem.unitsPerPack) || 1,
+              sellByPackDefault: Boolean(cleanItem.sellByPackDefault)
+            };
+
+            const existing = await db.products.where('barcode').equals(normalizedItem.barcode).first();
+            if (existing) {
+              await db.products.update(existing.id, normalizedItem);
+            } else {
+              await db.products.add(normalizedItem);
+            }
+          }
+        });
+
+        inserted += chunk.length;
+        if (typeof onProgress === 'function') {
+          onProgress({ inserted, total, percentage: Math.round((inserted / total) * 100) });
+        }
+      }
+
+      return { success: true, count: inserted };
+    } catch (err) {
+      console.error('[Dexie Catalog Import] Error:', err);
+      throw err;
+    }
+  }
+
   // Exposed FlexiDB global interface
   window.FlexiDB = {
     db: db,
@@ -556,6 +630,7 @@
     logCorrection: logCorrection,
     getAllCorrections: getAllCorrections,
     getLearningStats: getLearningStats,
+    importAlgeriaSupermarketCatalog: importAlgeriaSupermarketCatalog,
     DEFAULT_SEED_PRODUCTS: DEFAULT_SEED_PRODUCTS,
     DEFAULT_SEED_CATEGORIES: DEFAULT_SEED_CATEGORIES,
     DEFAULT_SEED_CUSTOMERS: DEFAULT_SEED_CUSTOMERS,

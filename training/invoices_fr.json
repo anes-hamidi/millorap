@@ -1,0 +1,27 @@
+[
+  {
+    "supplier": "Sarl GMS Distribution Algérie",
+    "documents": [
+      "Huile de table Elio 5L 4 3300\nSucre cristallisé Cevital 1kg 10 900\nCouscous fin Amor Benamor 1kg 5 650\nConcentré de tomate CAB 800g 12 3600\nCafé moulu Aroma 250g 6 1200\nFacture N Alger-2026-991",
+      "Lait en poudre Loya 500g 4 1800\nBoisson gazeuse Selecto 1.5L 6 540\nEau minérale Ifri fardeau 6x1.5L 4 520\nJus de fruit Rouiba 1L 6 840\nMargarine Fleurial 250g 10 1300\nBon de livraison BL-Oran",
+      "Yaourt nature Soummam 125g 24 480\nFromage en portions Lebègue 24p 4 1000\nLait UHT Candia 1L 12 1320\nBiscuits Bimo chocolat 6 420\nGaufrettes p'tit dej 4 360\nCode Client 16001",
+      "Pâtes Macaroni Safina 500g 12 1080\nFarine de blé panifiable 1kg 10 500\nLevure boulangère Saf 500g 2 700\nThé vert El-Bellout 250g 4 600\nSel fin iodé 1kg 10 250"
+    ]
+  },
+  {
+    "supplier": "Primeur & Terroir El-Djazaïr",
+    "documents": [
+      "Dattes Deglet Nour Tolga 1kg 4 2800\nHuile d'olive vierge Kabylie 1L 2 1700\nPomme de terre Mascara 10kg 2 1200\nOignon rouge local 5kg 2 450\nBon de commande BC-Tlemcen",
+      "Orange Thomson Mitidja 5kg 2 800\nPomme locale croquante 2kg 3 900\nTomate grappe serre 5kg 2 600\nCitron jaune 2kg 2 300\nPastèque locale 10kg 2 800",
+      "Figues sèches Beni Maouche 1kg 2 1900\nAmandes décortiquées 500g 2 1500\nCacahuètes grillées 1kg 3 1350\nRaisins secs blonds 1kg 2 1100"
+    ]
+  },
+  {
+    "supplier": "Distributeur Cosmétique & Détergents DZ",
+    "documents": [
+      "Lessive poudre Omo Matic 3kg 4 2400\nLiquide vaisselle Isis citron 1L 12 1560\nEau de Javel Bref 2L 6 720\nNettoyant sol Aigle 3L 4 960\nSavon de Marseille La Main 4 400\nFacture N 5581-Blida",
+      "Shampoing Venus cheveux secs 400ml 6 1200\nGel douche corps parfumé 250ml 6 1050\nDentifrice Signal anti-caries 75ml 12 1800\nPapier hygiénique Faderco 12 rlx 5 1500\nLingettes nettoyantes bébé 6 720",
+      "Couches bébé Canbébé Jumbo T4 3 3600\nAdoucissant textile Soupline 2L 4 1400\nSacs poubelle noirs 50L 10 1100\nÉponge grattante lot de 3 10 800\nNettoyant vitres 750ml 6 840"
+    ]
+  }
+]

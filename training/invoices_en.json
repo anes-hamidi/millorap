@@ -1,0 +1,27 @@
+[
+  {
+    "supplier": "North Africa Wholesale Grocers",
+    "documents": [
+      "Cevital Cooking Oil 5L 4 3300\nCevital Crystal Sugar 1kg 10 900\nAmor Benamor Fine Couscous 1kg 5 650\nCAB Double Tomato Paste 800g 12 3600\nAroma Ground Coffee 250g 6 1200\nExport Invoice EN-DZ-991",
+      "Loya Milk Powder 500g 4 1800\nSelecto Soda Bottle 1.5L 6 540\nIfri Mineral Water Pack 6x1.5L 4 520\nRouiba Fruit Juice 1L 6 840\nFleurial Margarine 250g 10 1300\nDelivery Note Algiers",
+      "Soummam Plain Yogurt 125g 24 480\nProcessed Cheese Portions 24p 4 1000\nCandia UHT Milk 1L 12 1320\nBimo Chocolate Biscuits 6 420\nSafina Macaroni Pasta 500g 12 1080",
+      "Bakers Yeast 500g 2 700\nGreen Tea Gunpowder 250g 4 600\nIodized Table Salt 1kg 10 250\nWhite Wheat Flour 1kg 10 500"
+    ]
+  },
+  {
+    "supplier": "Algerian Fresh Produce Exporters",
+    "documents": [
+      "Tolga Deglet Nour Dates 1kg 4 2800\nKabylia Extra Virgin Olive Oil 1L 2 1700\nMascara Potatoes Bag 10kg 2 1200\nLocal Red Onions 5kg 2 450\nShipment Manifest DZ-441",
+      "Mitidja Sweet Oranges 5kg 2 800\nLocal Crisp Apples 2kg 3 900\nGreenhouse Tomatoes 5kg 2 600\nFresh Yellow Lemons 2kg 2 300\nLocal Watermelon 10kg 2 800",
+      "Dried Figs Beni Maouche 1kg 2 1900\nShelled Sweet Almonds 500g 2 1500\nRoasted Peanuts 1kg 3 1350\nGolden Raisins 1kg 2 1100"
+    ]
+  },
+  {
+    "supplier": "Hygiene & Home Care Supply DZ",
+    "documents": [
+      "Omo Automatic Laundry Powder 3kg 4 2400\nIsis Lemon Dishwashing Liquid 1L 12 1560\nBref Bleach Liquid 2L 6 720\nAigle Floor Cleaner 3L 4 960\nMarseille Soap Bars 4 400\nTax Invoice 5581-EN",
+      "Venus Hair Shampoo 400ml 6 1200\nPerfumed Body Wash 250ml 6 1050\nFluoride Toothpaste 75ml 12 1800\nFaderco Toilet Paper 12 Rolls 5 1500\nBaby Wet Wipes Pack 6 720",
+      "Canbebe Baby Diapers Size 4 3 3600\nFabric Softener Liquid 2L 4 1400\nHeavy Duty Trash Bags 50L 10 1100\nScrubbing Sponges Pack of 3 10 800\nGlass Cleaner Spray 750ml 6 840"
+    ]
+  }
+]

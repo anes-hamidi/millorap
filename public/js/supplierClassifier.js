@@ -13,23 +13,39 @@
   }
 }(typeof self !== 'undefined' ? self : this, function () {
 
+  const ARABIC_DIGIT_MAP = { '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9' };
+  function normalizeArabicDigits(text) {
+    return text.replace(/[٠-٩]/g, d => ARABIC_DIGIT_MAP[d] ?? d);
+  }
+
+  const ARABIC_DIACRITICS = /[\u064B-\u0652\u0670\u06D6-\u06ED]/g;
+  const KEEP_CHARS = /[^a-z0-9\u0600-\u06FF\s]/g;
+
   const STOPWORDS = new Set([
     'de', 'la', 'le', 'les', 'des', 'un', 'une', 'du', 'au', 'aux',
     'et', 'ou', 'en', 'pour', 'par', 'sur', 'dans', 'avec', 'sans',
     'est', 'sont', 'facture', 'bon', 'livraison', 'total', 'montant',
     'date', 'tel', 'adresse', 'algerie', 'alger', 'tva', 'ttc', 'ht',
-    'rc', 'nif', 'nis', 'art', 'banque', 'rib', 'da', 'dzd', 'dz'
+    'rc', 'nif', 'nis', 'art', 'banque', 'rib', 'da', 'dzd', 'dz',
+    'ticket', 'paiement', 'credit', 'dette', 'client', 'acompte',
+    'the', 'a', 'an', 'and', 'or', 'of', 'to', 'for', 'in', 'on', 'with',
+    'في', 'من', 'على', 'إلى', 'و', 'أو', 'هذا', 'هذه', 'ذلك',
+    'فاتورة', 'المجموع', 'المبلغ', 'تاريخ', 'هاتف', 'العنوان', 'ضريبة',
+    'art000', 'art00', 'art0', 'gm', 'pm', 'mm', 'ml', 'cl', 'kg', 'gr', 'g'
   ]);
 
   function tokenize(text) {
     if (!text) return [];
-    return text
+    const normalized = normalizeArabicDigits(text)
       .toLowerCase()
-      .normalize('NFD')
+      .normalize('NFKD')
       .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(ARABIC_DIACRITICS, '')
+      .replace(KEEP_CHARS, ' ');
+
+    return normalized
       .split(/\s+/)
-      .filter(token => token.length >= 2 && !STOPWORDS.has(token));
+      .filter(token => token.length >= 2 && !STOPWORDS.has(token) && !/^\d+$/.test(token));
   }
 
   class SupplierClassifier {
@@ -122,20 +138,27 @@
 
       for (const className of this.model.classes) {
         const classDocs = this.model.classDocCounts[className] || 1;
-        const prior = Math.log(classDocs / totalDocs);
+        // Tempered log prior so large dataset classes don't drown out user corrections
+        const prior = Math.log(1 + Math.min(classDocs, 50));
 
         const totalClassWords = this.model.classWordCounts[className] || 0;
         const wordFreqs = this.model.wordFrequencyPerClass[className] || {};
 
         let likelihood = 0;
+        let matchedTokens = 0;
         for (const token of tokens) {
           const count = wordFreqs[token] || 0;
-          // Laplace Add-1 smoothing
-          const prob = (count + 1) / (totalClassWords + vocabSize);
-          likelihood += Math.log(prob);
+          if (count > 0) {
+            matchedTokens++;
+            const prob = (count + 1) / (totalClassWords + Math.min(vocabSize, 2000));
+            likelihood += Math.log(prob) + 3.0; // matched term boost
+          } else {
+            const prob = 1 / (totalClassWords + Math.min(vocabSize, 2000));
+            likelihood += Math.log(prob);
+          }
         }
 
-        const score = prior + likelihood;
+        const score = prior + likelihood + (matchedTokens * 2.5);
         logScores[className] = score;
         if (score > maxLogScore) {
           maxLogScore = score;

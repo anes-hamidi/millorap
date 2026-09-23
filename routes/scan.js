@@ -152,12 +152,29 @@ function extractStructuredInvoiceData(rawText, supplierTemplate = null) {
     }
   }
 
-  // If template is provided, use regex
-  if (!extractedSupplier && supplierTemplate && supplierTemplate.regexRules && supplierTemplate.regexRules.supplier) {
-    const match = rawText.match(new RegExp(supplierTemplate.regexRules.supplier, 'i'));
-    if (match) {
-      extractedSupplier = match[1] || match[0];
-      supplierConfidence = 95;
+  // Check first 4 header lines for explicit company name or trade header
+  if (!extractedSupplier && lines.length > 0) {
+    for (let i = 0; i < Math.min(4, lines.length); i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      if (/^(facture|ticket|bon\s*de|date|tableau|page|articles|désignation|total|zone|rue|tel|nif|nis|rc|art)/i.test(line)) {
+        continue;
+      }
+      if (/^(sarl|eurl|spa|snc|ets|ste|societe|société|grossiste|distributeur|comptoir|magasin)\b/i.test(line)) {
+        // Normalize title casing if in ALL CAPS
+        if (line.length > 3 && line === line.toUpperCase()) {
+          extractedSupplier = line
+            .split(/\s+/)
+            .map(w => (w.length <= 3 && !/^(et|du|de|la|le|des|en)$/i.test(w)) ? w.toUpperCase() : (w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
+            .join(' ')
+            .replace(/^Sarl\b/i, 'Sarl')
+            .replace(/^Eurl\b/i, 'Eurl');
+        } else {
+          extractedSupplier = line;
+        }
+        supplierConfidence = 90;
+        break;
+      }
     }
   }
 
