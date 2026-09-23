@@ -138,12 +138,22 @@ function extractStructuredInvoiceData(rawText, supplierTemplate = null) {
     .map(l => l.trim())
     .filter(l => l.length > 0);
 
-  // 1. Supplier Extraction
+  // 1. Supplier / Client Extraction
   let extractedSupplier = null;
   let supplierConfidence = 0;
 
+  // Look for explicit Fournisseur: or Client: or Émetteur: in raw text
+  const partyMatch = rawText.match(/(?:^|\n)\s*(?:fournisseur|client|magasin|emetteur|émetteur|societe|société)\s*[:]?\s*([^\r\n]+)/i);
+  if (partyMatch) {
+    const candidate = partyMatch[1].trim();
+    if (candidate && !/^(inconnu|standard|comptoir|divers|aucun|client|fournisseur)$/i.test(candidate)) {
+      extractedSupplier = candidate;
+      supplierConfidence = 85;
+    }
+  }
+
   // If template is provided, use regex
-  if (supplierTemplate && supplierTemplate.regexRules && supplierTemplate.regexRules.supplier) {
+  if (!extractedSupplier && supplierTemplate && supplierTemplate.regexRules && supplierTemplate.regexRules.supplier) {
     const match = rawText.match(new RegExp(supplierTemplate.regexRules.supplier, 'i'));
     if (match) {
       extractedSupplier = match[1] || match[0];
@@ -151,7 +161,7 @@ function extractStructuredInvoiceData(rawText, supplierTemplate = null) {
     }
   }
 
-  // Fallback to ML classifier if supplier not resolved by template
+  // Fallback to ML classifier if supplier not resolved by header
   if (!extractedSupplier && supplierClassifier) {
     const pred = supplierClassifier.predict(rawText);
     if (pred && pred.supplier) {
@@ -160,12 +170,12 @@ function extractStructuredInvoiceData(rawText, supplierTemplate = null) {
     }
   }
 
-  // 2. Invoice Number Extraction
+  // 2. Invoice / Ticket Number Extraction
   let invoiceNumber = '';
   const invNumberRegexes = [
-    /(?:facture\s*(?:proforma|d'avoir|avoir)?|fac|invoice|bl|bon\s*de\s*livraison|ref|bon\s*de\s*reception)\s*(?:n°|no\.?|#|numéro)?\s*[:.-]?\s*([a-z0-9\-_/]{3,30})/i,
-    /(?:n°|no\.?|#)\s*[:.-]?\s*([a-z0-9\-_/]{3,30})/i,
-    /(?:dz-inv|dz-po|inv|fac|fact|fp|bl)-\d+/i
+    /(?:ticket|facture\s*(?:proforma|d'avoir|avoir)?|fac|invoice|bl|bon\s*de\s*livraison|ref|bon\s*de\s*reception|recu|reçu)\s*(?:n°|no\.?|#|numéro)?\s*[:.-]?\s*([a-z0-9\-_/]{3,35})/i,
+    /(?:ticket|dz-t\d*|dz-inv|dz-po|inv|fac|fact|fp|bl)[-:][a-z0-9\-_/]+/i,
+    /(?:n°|no\.?|#)\s*[:.-]?\s*([a-z0-9\-_/]{3,30})/i
   ];
 
   for (const regex of invNumberRegexes) {
@@ -220,7 +230,7 @@ function extractStructuredInvoiceData(rawText, supplierTemplate = null) {
   for (const line of lines) {
     const lower = cleanText(line);
 
-    if (/total\s*ttc|net\s*a\s*payer|montant\s*total|total\s*general|total\s*final/.test(lower)) {
+    if (/total\s*commande|total\s*ttc|net\s*a\s*payer|montant\s*total|total\s*general|total\s*final/.test(lower) && !/reste\s*a\s*payer/.test(lower)) {
       const nums = line.match(/[\d\s.,]+(?:da|dzd)?$/i) || line.match(/[\d.,]{2,}/g);
       if (nums) {
         const val = parseNumber(nums[nums.length - 1]);
@@ -244,6 +254,7 @@ function extractStructuredInvoiceData(rawText, supplierTemplate = null) {
   // 5. Line Items Extraction
   const extractedItems = [];
   let isTableSection = false;
+  let isTableHasTotalOnly = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -252,16 +263,17 @@ function extractStructuredInvoiceData(rawText, supplierTemplate = null) {
     // Detect table header start
     if (/designation|description|article|produit|libelle/.test(lower) && /(qte|quantite|pu|prix|montant|total)/.test(lower)) {
       isTableSection = true;
+      isTableHasTotalOnly = /total|montant/.test(lower) && !/pu|prix\s*unit/i.test(lower);
       continue;
     }
 
     // Detect end of table (totals section)
-    if (/(total\s*ht|total\s*ttc|montant\s*ht|montant\s*total|sous\s*total|\btva\b|net\s*a\s*payer|mode\s*de\s*reglement|arrete\s*la\s*presente)/.test(lower)) {
+    if (/(total\s*ht|total\s*ttc|total\s*commande|montant\s*ht|montant\s*total|sous\s*total|\btva\b|net\s*a\s*payer|acompte|reste\s*a\s*payer|mode\s*de\s*reglement|arrete\s*la\s*presente|merci\s*pour)/.test(lower)) {
       isTableSection = false;
     }
 
     // Skip summary / total / non-item lines
-    if (/(total\s*ht|total\s*ttc|montant\s*ht|montant\s*total|sous\s*total|\btva\b|net\s*a\s*payer|mode\s*de\s*reglement|arrete\s*la\s*presente|nif\b|tel\b|rc\b)/.test(lower)) {
+    if (/(total\s*ht|total\s*ttc|total\s*commande|montant\s*ht|montant\s*total|sous\s*total|\btva\b|net\s*a\s*payer|acompte|reste\s*a\s*payer|mode\s*de\s*reglement|arrete\s*la\s*presente|nif\b|tel\b|rc\b|merci\s*pour)/.test(lower)) {
       continue;
     }
 
@@ -311,7 +323,7 @@ function extractStructuredInvoiceData(rawText, supplierTemplate = null) {
       }
     }
 
-    // Pattern C: If in table section, extract lines with 2 trailing numbers (Qty, Price)
+    // Pattern C: If in table section, extract lines with 2 trailing numbers (Qty, Price or Qty, Total)
     if (isTableSection) {
       const twoNumsMatch = line.match(/^(?:(\d+[\.\)-]?\s+))?(.*?)\s+(\d+(?:[.,]\d+)?)\s+([\d\s.,]+)$/);
       if (twoNumsMatch) {
@@ -320,12 +332,19 @@ function extractStructuredInvoiceData(rawText, supplierTemplate = null) {
         const price = parseNumber(twoNumsMatch[4]);
 
         if (desc && desc.length >= 2 && !/total|sous-total|tva|montant|remise|tableau/i.test(desc) && qty > 0 && price > 0) {
+          let unitPrice = price;
+          let lineTotal = qty * price;
+          if (isTableHasTotalOnly || (price >= 100 && qty > 1)) {
+            lineTotal = price;
+            unitPrice = Math.round((price / qty) * 100) / 100;
+          }
+
           extractedItems.push({
             rawDescription: desc,
             description: desc,
             quantity: Math.max(1, Math.round(qty)),
-            unitPrice: price,
-            total: qty * price,
+            unitPrice: unitPrice,
+            total: lineTotal,
             confidence: 85
           });
           continue;

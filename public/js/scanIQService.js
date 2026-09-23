@@ -204,17 +204,31 @@
           for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
-            let lastY = null;
-            let pageText = '';
-            for (const item of textContent.items) {
-              if (lastY !== null && item.transform && Math.abs(item.transform[5] - lastY) > 5) {
-                pageText += '\n';
-              } else if (pageText.length > 0 && !pageText.endsWith(' ') && !pageText.endsWith('\n')) {
-                pageText += ' ';
+            
+            // Spatial 2D Line Reconstruction (group by vertical Y with 3.5px threshold, sort left-to-right)
+            const lineBuckets = [];
+            for (const item of (textContent.items || [])) {
+              if (!item.str || item.str.trim() === '') continue;
+              const y = (item.transform && item.transform[5] != null) ? item.transform[5] : 0;
+              const x = (item.transform && item.transform[4] != null) ? item.transform[4] : 0;
+              
+              let bucket = lineBuckets.find(b => Math.abs(b.y - y) <= 3.5);
+              if (!bucket) {
+                bucket = { y, items: [] };
+                lineBuckets.push(bucket);
               }
-              pageText += item.str;
-              if (item.transform) lastY = item.transform[5];
+              bucket.items.push({ str: item.str, x });
             }
+            
+            // Sort lines top-to-bottom
+            lineBuckets.sort((a, b) => b.y - a.y);
+            
+            // Sort items left-to-right within each line
+            const pageText = lineBuckets.map(b => {
+              b.items.sort((a, b) => a.x - b.x);
+              return b.items.map(it => it.str.trim()).join(' ');
+            }).join('\n');
+
             fullText += pageText + '\n';
           }
 

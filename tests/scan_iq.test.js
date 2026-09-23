@@ -258,6 +258,45 @@ NET A PAYER: 5236.00 DA
   assert.strictEqual(matched[2].matchedProductId, 3);
 });
 
+runTest('POS Receipt / Ticket with Article-Qté-Total format extracts items and matches catalog', () => {
+  const POS_TICKET = `
+MILLORA STORE POS
+Système de Vente & Caisse
+Ticket: DZ-T1-mue6b3kc-807 ID: #4
+Date: 23/09/2026 16:03
+Paiement: À CRÉDIT (DETTE CLIENT)
+Client: Sarl Alger Papeterie
+Article Qté Total
+Muffin Chocolat 3 3000.00
+Croissant Frais 3 360.00
+Sous-total: 3360.00 DA
+Total Commande: 3360.00 DA
+Acompte Versé (Cash): 13200.00 DA
+RESTE À PAYER (DETTE): 0.00 DA
+MERCI POUR VOTRE VISITE !
+Millora POS 100% Hors-Ligne
+`;
+
+  const parsed = extractStructuredInvoiceData(POS_TICKET);
+  assert.strictEqual(parsed.supplier, 'Sarl Alger Papeterie');
+  assert.strictEqual(parsed.invoiceNumber, 'DZ-T1-mue6b3kc-807');
+  assert.strictEqual(parsed.date, '2026-09-23');
+  assert.strictEqual(parsed.items.length, 2);
+  assert.strictEqual(parsed.items[0].description, 'Muffin Chocolat');
+  assert.strictEqual(parsed.items[0].quantity, 3);
+  assert.strictEqual(parsed.items[0].unitPrice, 1000);
+  assert.strictEqual(parsed.items[0].total, 3000);
+  assert.strictEqual(parsed.items[1].description, 'Croissant Frais');
+  assert.strictEqual(parsed.items[1].quantity, 3);
+  assert.strictEqual(parsed.items[1].unitPrice, 120);
+  assert.strictEqual(parsed.items[1].total, 360);
+  assert.strictEqual(parsed.total, 3360);
+
+  const matched = matchItemsWithCatalog(parsed.items, SAMPLE_CATALOG);
+  assert.strictEqual(matched[0].matchedProductId, 4);
+  assert.strictEqual(matched[1].matchedProductId, 3);
+});
+
 // -----------------------------------------------------------------------------
 // SUMMARY
 // -----------------------------------------------------------------------------
