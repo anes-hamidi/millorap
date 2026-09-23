@@ -298,6 +298,96 @@ Millora POS 100% Hors-Ligne
 });
 
 // -----------------------------------------------------------------------------
+// TEST SUITE 6: AUTOMATIC SUPPLIER CREATION & PURCHASE ORDER ASSIGNMENT
+// -----------------------------------------------------------------------------
+console.log('\n🏭 [Suite 6/6] Automatic Supplier Creation & Purchases Assignment');
+
+runTest('New scanned supplier is registered and commands are linked with correct totals', () => {
+  const suppliersDb = [];
+  const purchasesDb = [];
+  const purchaseOrdersDb = [];
+
+  function simulateScanIQCommit(scanData) {
+    let supplierName = scanData.supplier || 'Fournisseur Inconnu';
+    let supplier = suppliersDb.find(s => s.name.toLowerCase() === supplierName.toLowerCase());
+    
+    if (!supplier) {
+      supplier = {
+        id: suppliersDb.length + 1,
+        name: supplierName,
+        phone: '',
+        createdAt: new Date().toISOString()
+      };
+      suppliersDb.push(supplier);
+    }
+
+    const purchase = {
+      id: purchasesDb.length + 1,
+      supplierId: supplier.id,
+      supplierName: supplier.name,
+      invoiceNumber: scanData.invoiceNumber,
+      date: scanData.date,
+      items: scanData.items,
+      subtotal: scanData.subtotal,
+      discount: scanData.discount || 0,
+      total: scanData.total,
+      createdAt: new Date().toISOString()
+    };
+    purchasesDb.push(purchase);
+
+    const po = {
+      id: purchaseOrdersDb.length + 1,
+      orderRef: scanData.invoiceNumber,
+      supplierId: supplier.id,
+      supplierName: supplier.name,
+      status: 'received',
+      source: 'scaniq',
+      purchaseId: purchase.id,
+      totalAmount: scanData.total,
+      createdAt: new Date().toISOString()
+    };
+    purchaseOrdersDb.push(po);
+
+    return { supplier, purchase, po };
+  }
+
+  // First scan: New supplier "Établissement Benhamouda Tech"
+  const result1 = simulateScanIQCommit({
+    supplier: 'Établissement Benhamouda Tech',
+    invoiceNumber: 'FAC-BEN-001',
+    date: '2026-09-23',
+    items: [{ description: 'Écouteurs Sans Fil', quantity: 5, unitPrice: 1600, total: 8000 }],
+    subtotal: 8000,
+    total: 8000
+  });
+
+  assert.strictEqual(suppliersDb.length, 1);
+  assert.strictEqual(suppliersDb[0].name, 'Établissement Benhamouda Tech');
+  assert.strictEqual(result1.purchase.supplierId, 1);
+  assert.strictEqual(result1.po.supplierId, 1);
+
+  // Second scan from the same supplier: Should link to existing supplier
+  const result2 = simulateScanIQCommit({
+    supplier: 'Établissement Benhamouda Tech',
+    invoiceNumber: 'FAC-BEN-002',
+    date: '2026-09-24',
+    items: [{ description: 'Câble USB-C Rapide', quantity: 10, unitPrice: 280, total: 2800 }],
+    subtotal: 2800,
+    total: 2800
+  });
+
+  assert.strictEqual(suppliersDb.length, 1, 'Supplier count should not duplicate');
+  assert.strictEqual(result2.purchase.supplierId, 1);
+
+  // Check supplier purchases aggregation
+  const supplier1Purchases = purchasesDb.filter(p => p.supplierId === 1);
+  const totalSpent = supplier1Purchases.reduce((sum, p) => sum + p.total, 0);
+
+  assert.strictEqual(supplier1Purchases.length, 2);
+  assert.strictEqual(totalSpent, 10800);
+});
+
+// -----------------------------------------------------------------------------
 // SUMMARY
 // -----------------------------------------------------------------------------
 console.log('\n📊 =========================================================');

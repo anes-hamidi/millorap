@@ -1056,15 +1056,20 @@ Total TTC : 952.00 DA`);
     }
 
     // Atomic transaction for Restocking
-    await d.transaction('rw', [d.purchases, d.products, d.stockLogs, d.corrections, d.suppliers], async () => {
-      // 0. Auto-create supplier if new and doesn't exist
-      if (!supplierId && supplierName && supplierName !== 'Fournisseur Inconnu') {
-        const existingSup = await d.suppliers.where('name').equalsIgnoreCase(supplierName).first();
+    await d.transaction('rw', [d.purchases, d.products, d.stockLogs, d.corrections, d.suppliers, d.purchaseOrders, d.purchaseOrderItems], async () => {
+      // 0. Auto-create supplier if new and doesn't exist in d.suppliers table
+      if (!supplierId) {
+        const cleanSupName = supplierName && supplierName !== 'Fournisseur Inconnu' ? supplierName.trim() : 'Fournisseur Inconnu';
+        let existingSup = null;
+        if (cleanSupName !== 'Fournisseur Inconnu') {
+          existingSup = await d.suppliers.where('name').equalsIgnoreCase(cleanSupName).first();
+        }
         if (existingSup) {
           supplierId = existingSup.id;
+          supplierName = existingSup.name;
         } else {
           supplierId = await d.suppliers.add({
-            name: supplierName,
+            name: cleanSupName,
             phone: '',
             email: '',
             address: '',
@@ -1072,12 +1077,13 @@ Total TTC : 952.00 DA`);
             createdAt: now,
             updatedAt: now
           });
+          supplierName = cleanSupName;
         }
       }
 
-      // 1. Save purchase record
-      await d.purchases.add({
-        supplierId: supplierId || null,
+      // 1. Save purchase record with assigned supplier ID
+      const purchaseId = await d.purchases.add({
+        supplierId: supplierId ? Number(supplierId) : null,
         supplierName,
         invoiceNumber: invNum,
         date: invDate,
@@ -1089,7 +1095,43 @@ Total TTC : 952.00 DA`);
         createdAt: now
       });
 
-      // 2. Increment stock for products
+      // 2. Also register in purchaseOrders for unified supplier history & tracking
+      if (d.purchaseOrders) {
+        const poId = await d.purchaseOrders.add({
+          orderRef: invNum || `FAC-${purchaseId}`,
+          supplierId: supplierId ? Number(supplierId) : null,
+          supplierName,
+          status: 'received',
+          source: 'scaniq',
+          purchaseId: purchaseId,
+          totalAmount: activeScanData.total,
+          totalEstimatedAmount: activeScanData.total,
+          expectedDate: invDate,
+          lastReceivedAt: now,
+          createdAt: now,
+          updatedAt: now
+        });
+
+        if (d.purchaseOrderItems) {
+          for (const item of activeScanData.items) {
+            const packMult = Number(item.packMultiplier) || 1;
+            const qtyEntered = Number(item.quantity) || 1;
+            const unitsToAdd = qtyEntered * packMult;
+            const unitCostPrice = packMult > 1 ? (Number(item.unitPrice) / packMult) : Number(item.unitPrice);
+
+            await d.purchaseOrderItems.add({
+              purchaseOrderId: poId,
+              productId: item.matchedProductId || null,
+              description: item.description,
+              quantityOrdered: unitsToAdd,
+              quantityReceived: unitsToAdd,
+              unitCost: unitCostPrice
+            });
+          }
+        }
+      }
+
+      // 3. Increment stock for products
       for (const item of activeScanData.items) {
         const packMult = Number(item.packMultiplier) || 1;
         const qtyEntered = Number(item.quantity) || 1;
@@ -1147,7 +1189,7 @@ Total TTC : 952.00 DA`);
         }
       }
 
-      // 3. Save corrections to Dexie
+      // 4. Save corrections to Dexie
       for (const corr of trackedCorrections) {
         await d.corrections.add({
           ...corr,
@@ -1159,7 +1201,7 @@ Total TTC : 952.00 DA`);
     // Close modal
     document.getElementById('scaniq-validate-modal')?.classList.add('hidden');
     if (window.showToast) {
-      window.showToast(`✅ Commande #${invNum} validée et stock mis à jour (${activeScanData.total.toFixed(2)} DA) !`);
+      window.showToast(`✅ Commande #${invNum} validée, fournisseur enregistré et stock mis à jour !`);
     }
 
     // Refresh views

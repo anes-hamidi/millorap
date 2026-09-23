@@ -1914,37 +1914,54 @@ async function renderSuppliersWorkspace() {
     if (kpiPending) kpiPending.innerText = orders.filter(o => o.status === 'pending').length;
     if (kpiTotal) kpiTotal.innerText = orders.length;
 
-    // 1. Render Purchase Orders Table
+    // 1. Render Purchase Orders & Invoices Table
     const poLabel = document.getElementById('po-count-label');
-    if (poLabel) poLabel.innerText = `${orders.length} commande(s)`;
+    if (poLabel) poLabel.innerText = `${orders.length} commande(s) & facture(s)`;
 
     const poTableBody = document.getElementById('purchase-orders-table-body');
     if (poTableBody) {
       if (orders.length === 0) {
-        poTableBody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400 text-xs">Aucun bon de commande enregistré.</td></tr>';
+        poTableBody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400 text-xs">Aucune commande ou facture enregistrée.</td></tr>';
       } else {
         poTableBody.innerHTML = orders.map(po => {
-          const dateStr = new Date(po.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+          const dateStr = po.createdAt ? new Date(po.createdAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : (po.expectedDate || '');
           const isPending = po.status === 'pending';
           const isReceived = po.status === 'received';
-          const statusBadge = isPending
+          const isScanIQ = po.source === 'scaniq' || po.type === 'scaniq';
+
+          const statusBadge = isScanIQ
+            ? '<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700">⚡ FACTURE SCANÉE</span>'
+            : (isPending
             ? '<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 animate-pulse">🟡 EN ATTENTE</span>'
             : isReceived
             ? '<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">🟢 RÉCEPTIONNÉ</span>'
-            : '<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">⚪ ANNULÉ</span>';
+            : '<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">⚪ ANNULÉ</span>');
 
           const safeId = escapeHtml(String(po.id));
 
           return `
             <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition text-xs">
-              <td class="p-3.5 font-mono font-bold text-slate-900 dark:text-slate-100">${escapeHtml(po.orderRef || 'DZ-PO')}</td>
-              <td class="p-3.5 font-semibold text-slate-800 dark:text-slate-200">${escapeHtml(po.supplierName || 'Fournisseur')}</td>
+              <td class="p-3.5 font-mono font-bold text-slate-900 dark:text-slate-100">
+                <div class="flex items-center gap-1.5">
+                  <span>${isScanIQ ? '⚡' : '📦'}</span>
+                  <span>${escapeHtml(po.orderRef || 'DZ-PO')}</span>
+                </div>
+              </td>
+              <td class="p-3.5 font-semibold text-slate-800 dark:text-slate-200">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-slate-400">🏭</span>
+                  <span>${escapeHtml(po.supplierName || 'Fournisseur')}</span>
+                </div>
+              </td>
               <td class="p-3.5 text-slate-500 font-mono text-[11px]">${dateStr}</td>
               <td class="p-3.5 text-center font-bold">${po.itemsCount || po.itemCount || po.totalOrdered || 0} article(s)</td>
               <td class="p-3.5 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">${Number(po.totalAmount || po.totalEstimatedAmount || 0).toFixed(2)} DA</td>
               <td class="p-3.5 text-center">${statusBadge}</td>
               <td class="p-3.5 text-right">
                 <div class="flex items-center justify-end gap-1.5">
+                  <button onclick="openOrderDetailsModal('${safeId}')" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition flex items-center gap-1" title="Voir les détails">
+                    <span>👁️</span> <span>Détails</span>
+                  </button>
                   ${isPending ? `
                     <button onclick="openReceiveDeliveryModal('${safeId}')" class="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition flex items-center gap-1" title="Réceptionner la livraison">
                       <span>🚚</span> <span>Réceptionner</span>
@@ -1961,19 +1978,19 @@ async function renderSuppliersWorkspace() {
       }
     }
 
-    // 2. Render Suppliers Directory Table
+    // 2. Render Suppliers Directory Table with Total Purchases
     const supLabel = document.getElementById('suppliers-count-label');
     if (supLabel) supLabel.innerText = `${suppliers.length} fournisseur(s)`;
 
     const supTableBody = document.getElementById('suppliers-table-body');
     if (supTableBody) {
       if (suppliers.length === 0) {
-        supTableBody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Aucun fournisseur enregistré. Cliquez sur "Ajouter Fournisseur".</td></tr>';
+        supTableBody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-400 text-xs">Aucun fournisseur enregistré. Scannez une facture ou cliquez sur "Ajouter Fournisseur".</td></tr>';
       } else {
         supTableBody.innerHTML = suppliers.map(s => {
-          const supplierOrders = orders.filter(o => String(o.supplierId) === String(s.id));
-          const pendingOrders = supplierOrders.filter(o => o.status === 'pending').length;
+          const pendingOrders = s.pendingOrdersCount || 0;
           const safeId = escapeHtml(String(s.id));
+          const totalSpentFormatted = Number(s.totalPurchasesAmount || 0).toFixed(2);
 
           return `
             <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition text-xs">
@@ -1984,14 +2001,18 @@ async function renderSuppliersWorkspace() {
                 </div>
               </td>
               <td class="p-3.5 text-slate-500 font-mono">${escapeHtml(s.phone || 'Non renseigné')}</td>
-              <td class="p-3.5 text-center font-bold">${supplierOrders.length}</td>
+              <td class="p-3.5 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">${totalSpentFormatted} DA</td>
+              <td class="p-3.5 text-center font-bold">${s.ordersCount || 0}</td>
               <td class="p-3.5 text-center">
                 ${pendingOrders > 0 ? `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">${pendingOrders} en cours</span>` : '<span class="text-slate-400">0</span>'}
               </td>
               <td class="p-3.5 text-right">
                 <div class="flex items-center justify-end gap-1.5">
-                  <button onclick="openSupplierModal('${safeId}')" class="p-1.5 px-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-bold text-xs transition flex items-center gap-1">
-                    <span>✏️</span> <span>Modifier</span>
+                  <button onclick="openSupplierPurchasesModal('${safeId}')" class="p-1.5 px-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 hover:bg-indigo-100 dark:hover:bg-indigo-900/70 text-indigo-600 dark:text-indigo-300 font-bold text-xs transition flex items-center gap-1" title="Voir l'historique de tous les achats auprès de ce fournisseur">
+                    <span>📦</span> <span>Achats</span>
+                  </button>
+                  <button onclick="openSupplierModal('${safeId}')" class="p-1.5 px-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-bold text-xs transition flex items-center gap-1" title="Modifier">
+                    <span>✏️</span>
                   </button>
                   <button onclick="handleDeleteSupplier('${safeId}')" class="p-1.5 px-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-rose-50 text-slate-400 hover:text-rose-600 text-xs transition" title="Supprimer">
                     🗑️
@@ -2009,6 +2030,197 @@ async function renderSuppliersWorkspace() {
   }
 }
 window.renderSuppliersWorkspace = renderSuppliersWorkspace;
+
+// Supplier Purchases History Modal (Task: Display all purchases per supplier)
+async function openSupplierPurchasesModal(supplierId) {
+  const modal = document.getElementById('supplier-purchases-modal');
+  const title = document.getElementById('supplier-purchases-modal-title');
+  const statsContainer = document.getElementById('supplier-purchases-modal-stats');
+  const listContainer = document.getElementById('supplier-purchases-modal-list');
+
+  if (!modal || !listContainer) return;
+
+  modal.classList.remove('hidden');
+  listContainer.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Chargement des achats...</td></tr>';
+
+  try {
+    const data = await window.SupplierService.getSupplierPurchases(supplierId);
+    const supplier = data.supplier;
+    const purchases = data.purchases || [];
+
+    if (title) {
+      title.innerHTML = `<span>🏭</span> Historique des Achats — ${escapeHtml(supplier ? supplier.name : 'Fournisseur')}`;
+    }
+
+    if (statsContainer) {
+      statsContainer.innerHTML = `
+        <div class="p-3 bg-indigo-50 dark:bg-indigo-950/50 rounded-2xl border border-indigo-100 dark:border-indigo-900 flex flex-col">
+          <span class="text-[10px] uppercase font-bold text-indigo-500">Total Dépensé</span>
+          <span class="text-base font-black font-mono text-indigo-700 dark:text-indigo-300">${Number(data.totalSpentAmount || 0).toFixed(2)} DA</span>
+        </div>
+        <div class="p-3 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col">
+          <span class="text-[10px] uppercase font-bold text-slate-400">Nombre de Factures / Commandes</span>
+          <span class="text-base font-black text-slate-800 dark:text-slate-100 font-mono">${data.totalPurchasesCount || 0}</span>
+        </div>
+        <div class="p-3 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col">
+          <span class="text-[10px] uppercase font-bold text-slate-400">Téléphone Contact</span>
+          <span class="text-xs font-bold text-slate-700 dark:text-slate-200 font-mono">${escapeHtml(supplier?.phone || 'Non renseigné')}</span>
+        </div>
+      `;
+    }
+
+    if (purchases.length === 0) {
+      listContainer.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Aucun achat ou commande enregistré pour ce fournisseur.</td></tr>';
+    } else {
+      listContainer.innerHTML = purchases.map(p => {
+        const dateStr = p.date || (p.createdAt ? new Date(p.createdAt).toLocaleDateString() : '');
+        const isScanIQ = p.type === 'scaniq';
+        const badge = isScanIQ
+          ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700">⚡ Facture Validée</span>'
+          : (p.status === 'received'
+          ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">🟢 Réceptionné</span>'
+          : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300">🟡 En Attente</span>');
+
+        const safeId = escapeHtml(String(p.id));
+
+        return `
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 text-xs">
+            <td class="p-3 font-mono font-bold text-slate-800 dark:text-slate-200">${escapeHtml(p.orderRef || p.invoiceNumber)}</td>
+            <td class="p-3 font-mono text-slate-500">${dateStr}</td>
+            <td class="p-3 text-center font-semibold">${p.itemsCount} article(s)</td>
+            <td class="p-3 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">${Number(p.totalAmount).toFixed(2)} DA</td>
+            <td class="p-3 text-center">${badge}</td>
+            <td class="p-3 text-right">
+              <button onclick="openOrderDetailsModal('${isScanIQ ? 'purch_' + safeId : safeId}')" class="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold transition">
+                <span>👁️</span> <span>Détails</span>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  } catch (err) {
+    console.error('Error fetching supplier purchases:', err);
+    showToast('Erreur lors du chargement des achats: ' + err.message, 'error');
+  }
+}
+window.openSupplierPurchasesModal = openSupplierPurchasesModal;
+
+// Order / Purchase Details Modal
+async function openOrderDetailsModal(rawId) {
+  const modal = document.getElementById('purchase-details-modal');
+  const title = document.getElementById('purchase-details-modal-title');
+  const metaContainer = document.getElementById('purchase-details-modal-meta');
+  const itemsContainer = document.getElementById('purchase-details-modal-items');
+
+  if (!modal || !itemsContainer) return;
+
+  modal.classList.remove('hidden');
+  itemsContainer.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400 text-xs">Chargement des détails...</td></tr>';
+
+  try {
+    const d = window.FlexiDB.db;
+    let orderRef = '';
+    let supplierName = 'Fournisseur';
+    let dateStr = '';
+    let items = [];
+    let subtotal = 0;
+    let discount = 0;
+    let total = 0;
+    let statusBadge = '';
+
+    if (String(rawId).startsWith('purch_')) {
+      const pId = Number(String(rawId).replace('purch_', ''));
+      const p = await d.purchases.get(pId);
+      if (p) {
+        orderRef = p.invoiceNumber || `FAC-${p.id}`;
+        supplierName = p.supplierName || 'Fournisseur';
+        dateStr = p.date || (p.createdAt ? p.createdAt.slice(0, 10) : '');
+        items = p.items || [];
+        subtotal = Number(p.subtotal) || 0;
+        discount = Number(p.discount) || 0;
+        total = Number(p.total) || (subtotal - discount);
+        statusBadge = '<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700">⚡ FACTURE SCANÉE</span>';
+      }
+    } else {
+      const poData = await window.SupplierService.getPurchaseOrderById(rawId);
+      if (poData) {
+        const order = poData.order || poData;
+        orderRef = order.orderRef || `DZ-PO-${order.id}`;
+        supplierName = order.supplierName || 'Fournisseur';
+        dateStr = order.expectedDate || (order.createdAt ? order.createdAt.slice(0, 10) : '');
+        items = (poData.items || []).map(it => ({
+          description: it.productName || it.description || 'Article',
+          quantity: it.quantityOrdered,
+          unitPrice: it.unitCost,
+          total: (Number(it.quantityOrdered) || 0) * (Number(it.unitCost) || 0)
+        }));
+        subtotal = items.reduce((s, it) => s + it.total, 0);
+        total = order.totalAmount != null ? Number(order.totalAmount) : subtotal;
+        statusBadge = order.status === 'received'
+          ? '<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">🟢 RÉCEPTIONNÉ</span>'
+          : '<span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300">🟡 EN ATTENTE</span>';
+      }
+    }
+
+    if (title) title.innerHTML = `<span>📑</span> Détails Commande / Facture — ${escapeHtml(orderRef)}`;
+
+    if (metaContainer) {
+      metaContainer.innerHTML = `
+        <div class="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-800/70 rounded-2xl border border-slate-200 dark:border-slate-700 text-xs">
+          <div class="flex items-center gap-4">
+            <div>
+              <span class="text-[10px] text-slate-400 uppercase font-bold block">Fournisseur</span>
+              <span class="font-bold text-slate-800 dark:text-slate-100">🏭 ${escapeHtml(supplierName)}</span>
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-400 uppercase font-bold block">Date</span>
+              <span class="font-mono text-slate-600 dark:text-slate-300">${dateStr}</span>
+            </div>
+          </div>
+          <div>${statusBadge}</div>
+        </div>
+      `;
+    }
+
+    if (items.length === 0) {
+      itemsContainer.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-slate-400 text-xs">Aucun article dans cette commande.</td></tr>';
+    } else {
+      itemsContainer.innerHTML = items.map(it => {
+        const qty = Number(it.quantity) || 1;
+        const price = Number(it.unitPrice) || 0;
+        const lineTot = Number(it.total) || (qty * price);
+        const packInfo = it.packMultiplier > 1 ? `<span class="text-[10px] text-indigo-500 font-bold block">Pack x${it.packMultiplier}</span>` : '';
+
+        return `
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 text-xs">
+            <td class="p-3 font-semibold text-slate-800 dark:text-slate-200">
+              ${escapeHtml(it.description || 'Article')}
+              ${packInfo}
+            </td>
+            <td class="p-3 text-center font-mono font-bold">${qty}</td>
+            <td class="p-3 text-right font-mono">${price.toFixed(2)} DA</td>
+            <td class="p-3 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">${lineTot.toFixed(2)} DA</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Update Totals Summary
+    const subtotalEl = document.getElementById('purchase-details-subtotal');
+    const discountEl = document.getElementById('purchase-details-discount');
+    const totalEl = document.getElementById('purchase-details-total');
+
+    if (subtotalEl) subtotalEl.innerText = `${subtotal.toFixed(2)} DA`;
+    if (discountEl) discountEl.innerText = `${discount.toFixed(2)} DA`;
+    if (totalEl) totalEl.innerText = `${total.toFixed(2)} DA`;
+
+  } catch (err) {
+    console.error('Error opening order details:', err);
+    showToast('Erreur détails commande: ' + err.message, 'error');
+  }
+}
+window.openOrderDetailsModal = openOrderDetailsModal;
 
 // Supplier Modal & Form Handlers
 async function openSupplierModal(supplierId = null) {

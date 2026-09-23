@@ -102,24 +102,155 @@
   }
 
   /**
-   * Get all suppliers enriched with purchase order count
+   * Get single supplier by ID enriched with order stats
+   */
+  async function getSupplierById(id) {
+    const s = await findSupplier(id);
+    if (!s) return null;
+    const d = db();
+    if (!d) return s;
+
+    const [orders, purchases] = await Promise.all([
+      d.purchaseOrders ? d.purchaseOrders.toArray() : [],
+      d.purchases ? d.purchases.toArray() : []
+    ]);
+
+    const targetId = s.id;
+    const sOrders = orders.filter(o => o.supplierId === targetId || String(o.supplierId) === String(targetId));
+    const sPurchases = purchases.filter(p => p.supplierId === targetId || String(p.supplierId) === String(targetId));
+
+    const totalSpent = sPurchases.reduce((sum, p) => sum + (Number(p.total) || 0), 0) +
+      sOrders.filter(o => !o.purchaseId && (o.status === 'received' || o.status === 'partial')).reduce((sum, o) => sum + (Number(o.totalAmount || o.totalEstimatedAmount) || 0), 0);
+
+    const totalOrdersCount = sOrders.length + sPurchases.filter(p => !sOrders.some(o => o.purchaseId === p.id)).length;
+
+    return {
+      ...s,
+      ordersCount: totalOrdersCount,
+      totalPurchasesAmount: totalSpent
+    };
+  }
+
+  /**
+   * Get all purchases and commands for a specific supplier
+   */
+  async function getSupplierPurchases(supplierId) {
+    const d = db();
+    if (!d) return { supplier: null, purchases: [], totalPurchasesCount: 0, totalSpentAmount: 0 };
+    const supplier = await findSupplier(supplierId);
+    if (!supplier) return { supplier: null, purchases: [], totalPurchasesCount: 0, totalSpentAmount: 0 };
+
+    const targetId = supplier.id;
+    const [allPurchases, allOrders, allItems, allProducts] = await Promise.all([
+      d.purchases ? d.purchases.toArray() : [],
+      d.purchaseOrders ? d.purchaseOrders.toArray() : [],
+      d.purchaseOrderItems ? d.purchaseOrderItems.toArray() : [],
+      d.products ? d.products.toArray() : []
+    ]);
+
+    const prodMap = new Map(allProducts.map(p => [String(p.id), p]));
+    const supplierPurchases = allPurchases.filter(p => p.supplierId === targetId || String(p.supplierId) === String(targetId));
+    const supplierOrders = allOrders.filter(o => o.supplierId === targetId || String(o.supplierId) === String(targetId));
+
+    const combined = [];
+    const seenPurchaseIds = new Set();
+
+    // 1. Add ScanIQ purchases
+    for (const p of supplierPurchases) {
+      seenPurchaseIds.add(p.id);
+      combined.push({
+        id: p.id,
+        type: 'scaniq',
+        orderRef: p.invoiceNumber || `FAC-${p.id}`,
+        invoiceNumber: p.invoiceNumber || `FAC-${p.id}`,
+        date: p.date || (p.createdAt ? p.createdAt.slice(0, 10) : ''),
+        createdAt: p.createdAt,
+        itemsCount: (p.items || []).length,
+        items: p.items || [],
+        subtotal: Number(p.subtotal) || 0,
+        discount: Number(p.discount) || 0,
+        totalAmount: Number(p.total) || 0,
+        status: 'received',
+        statusLabel: 'Facture Validée',
+        supplierName: supplier.name
+      });
+    }
+
+    // 2. Add manual purchase orders
+    for (const o of supplierOrders) {
+      if (o.purchaseId && seenPurchaseIds.has(o.purchaseId)) continue;
+      const oItems = allItems.filter(i => i.purchaseOrderId === o.id || String(i.purchaseOrderId) === String(o.id));
+      const totalAmount = o.totalAmount != null ? Number(o.totalAmount) : oItems.reduce((sum, i) => sum + ((Number(i.quantityOrdered) || 0) * (Number(i.unitCost) || 0)), 0);
+
+      combined.push({
+        id: o.id,
+        type: o.source === 'scaniq' ? 'scaniq' : 'po',
+        orderRef: o.orderRef || `DZ-PO-${o.id}`,
+        invoiceNumber: o.orderRef,
+        date: o.expectedDate || (o.createdAt ? o.createdAt.slice(0, 10) : ''),
+        createdAt: o.createdAt,
+        itemsCount: oItems.length,
+        items: oItems.map(i => {
+          const p = prodMap.get(String(i.productId)) || {};
+          return {
+            description: i.description || p.name || 'Article',
+            quantity: i.quantityOrdered,
+            unitPrice: i.unitCost,
+            total: (Number(i.quantityOrdered) || 0) * (Number(i.unitCost) || 0)
+          };
+        }),
+        subtotal: totalAmount,
+        discount: 0,
+        totalAmount: totalAmount,
+        status: o.status,
+        statusLabel: o.status === 'received' ? (o.source === 'scaniq' ? 'Facture Validée' : 'Réceptionné') : (o.status === 'pending' ? 'En Attente' : o.status),
+        supplierName: supplier.name
+      });
+    }
+
+    combined.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    const totalSpent = combined.filter(c => c.status === 'received').reduce((sum, c) => sum + c.totalAmount, 0);
+
+    return {
+      supplier,
+      purchases: combined,
+      totalPurchasesCount: combined.length,
+      totalSpentAmount: totalSpent
+    };
+  }
+
+  /**
+   * Get all suppliers enriched with purchase order count & total purchases amount
    */
   async function getAllSuppliers() {
     const d = db();
     if (!d || !d.suppliers) return [];
 
-    const [suppliers, orders] = await Promise.all([
+    const [suppliers, orders, purchases] = await Promise.all([
       d.suppliers.toArray(),
-      d.purchaseOrders.toArray()
+      d.purchaseOrders ? d.purchaseOrders.toArray() : [],
+      d.purchases ? d.purchases.toArray() : []
     ]);
 
     return suppliers.map(s => {
-      const sOrders = orders.filter(o => o.supplierId === s.id || String(o.supplierId) === String(s.id));
+      const targetId = s.id;
+      const sOrders = orders.filter(o => o.supplierId === targetId || String(o.supplierId) === String(targetId));
+      const sPurchases = purchases.filter(p => p.supplierId === targetId || String(p.supplierId) === String(targetId));
+
       const pendingCount = sOrders.filter(o => o.status === 'pending' || o.status === 'partial').length;
+      
+      const purchasesAmount = sPurchases.reduce((sum, p) => sum + (Number(p.total) || 0), 0);
+      const ordersAmount = sOrders
+        .filter(o => !o.purchaseId && (o.status === 'received' || o.status === 'partial'))
+        .reduce((sum, o) => sum + (Number(o.totalAmount || o.totalEstimatedAmount) || 0), 0);
+
+      const totalOrdersCount = sOrders.length + sPurchases.filter(p => !sOrders.some(o => o.purchaseId === p.id)).length;
+
       return {
         ...s,
-        ordersCount: sOrders.length,
-        pendingOrdersCount: pendingCount
+        ordersCount: totalOrdersCount,
+        pendingOrdersCount: pendingCount,
+        totalPurchasesAmount: purchasesAmount + ordersAmount
       };
     }).sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -232,39 +363,71 @@
   }
 
   /**
-   * Get all Purchase Orders with supplier names
+   * Get all Purchase Orders & ScanIQ Invoices with supplier names
    */
   async function getAllPurchaseOrders() {
     const d = db();
-    if (!d || !d.purchaseOrders) return [];
+    if (!d) return [];
 
-    const [orders, suppliers, orderItems] = await Promise.all([
-      d.purchaseOrders.toArray(),
-      d.suppliers.toArray(),
-      d.purchaseOrderItems.toArray()
+    const [orders, suppliers, orderItems, purchases] = await Promise.all([
+      d.purchaseOrders ? d.purchaseOrders.toArray() : [],
+      d.suppliers ? d.suppliers.toArray() : [],
+      d.purchaseOrderItems ? d.purchaseOrderItems.toArray() : [],
+      d.purchases ? d.purchases.toArray() : []
     ]);
 
     const supMap = new Map(suppliers.map(s => [String(s.id), s]));
+    const poList = [];
+    const seenPurchaseIds = new Set();
 
-    return orders.map(o => {
+    for (const o of orders) {
+      if (o.purchaseId) seenPurchaseIds.add(o.purchaseId);
       const s = supMap.get(String(o.supplierId));
       const items = orderItems.filter(i => i.purchaseOrderId === o.id || String(i.purchaseOrderId) === String(o.id));
       const totalOrdered = items.reduce((sum, i) => sum + (Number(i.quantityOrdered) || 0), 0);
       const totalReceived = items.reduce((sum, i) => sum + (Number(i.quantityReceived) || 0), 0);
-      const totalAmount = items.reduce((sum, i) => sum + ((Number(i.quantityOrdered) || 0) * (Number(i.unitCost) || 0)), 0);
+      const totalAmount = o.totalAmount != null ? Number(o.totalAmount) : items.reduce((sum, i) => sum + ((Number(i.quantityOrdered) || 0) * (Number(i.unitCost) || 0)), 0);
 
-      return {
+      poList.push({
         ...o,
         orderRef: o.orderRef || `DZ-PO-${String(o.id).slice(-4)}`,
-        supplierName: s ? s.name : 'Fournisseur Inconnu',
+        supplierName: s ? s.name : (o.supplierName || 'Fournisseur Inconnu'),
+        supplierPhone: s ? s.phone : '',
         itemsCount: items.length,
         itemCount: items.length,
         totalOrdered,
         totalReceived,
         totalAmount,
-        totalEstimatedAmount: totalAmount
-      };
-    }).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        totalEstimatedAmount: totalAmount,
+        type: o.source === 'scaniq' ? 'scaniq' : 'po'
+      });
+    }
+
+    // Merge any standalone purchases not in purchaseOrders
+    for (const p of purchases) {
+      if (seenPurchaseIds.has(p.id)) continue;
+      const s = supMap.get(String(p.supplierId));
+      poList.push({
+        id: `purch_${p.id}`,
+        purchaseId: p.id,
+        orderRef: p.invoiceNumber || `FAC-${p.id}`,
+        supplierId: p.supplierId,
+        supplierName: s ? s.name : (p.supplierName || 'Fournisseur Inconnu'),
+        status: 'received',
+        source: 'scaniq',
+        type: 'scaniq',
+        itemsCount: (p.items || []).length,
+        itemCount: (p.items || []).length,
+        totalOrdered: (p.items || []).reduce((sum, i) => sum + (Number(i.quantity) || 1), 0),
+        totalReceived: (p.items || []).reduce((sum, i) => sum + (Number(i.quantity) || 1), 0),
+        totalAmount: Number(p.total) || 0,
+        totalEstimatedAmount: Number(p.total) || 0,
+        createdAt: p.createdAt,
+        expectedDate: p.date
+      });
+    }
+
+    return poList.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   }
 
   /**
@@ -418,6 +581,8 @@
     createSupplier,
     updateSupplier,
     deleteSupplier,
+    getSupplierById,
+    getSupplierPurchases,
     getAllSuppliers,
     createPurchaseOrder,
     getPurchaseOrderById,

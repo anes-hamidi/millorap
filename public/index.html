@@ -2951,6 +2951,98 @@
     </div>
   </div>
 
+  <!-- MODAL: Supplier Purchases History (Task: Display all purchases per supplier) -->
+  <div id="supplier-purchases-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-3xl w-full shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <h3 id="supplier-purchases-modal-title" class="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <span>🏭</span> Historique des Achats
+        </h3>
+        <button onclick="document.getElementById('supplier-purchases-modal')?.classList.add('hidden')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">✕</button>
+      </div>
+
+      <!-- Quick KPI Strip -->
+      <div id="supplier-purchases-modal-stats" class="grid grid-cols-1 sm:grid-cols-3 gap-3"></div>
+
+      <!-- Purchases & Orders Table -->
+      <div class="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-900/60">
+        <table class="w-full text-xs text-left">
+          <thead class="bg-slate-50 dark:bg-slate-800/80 text-slate-400 text-[10px] uppercase font-bold tracking-wider border-b border-slate-200 dark:border-slate-800">
+            <tr>
+              <th class="p-3">N° Facture / BC</th>
+              <th class="p-3">Date</th>
+              <th class="p-3 text-center">Articles</th>
+              <th class="p-3 text-right">Montant</th>
+              <th class="p-3 text-center">Statut</th>
+              <th class="p-3 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="supplier-purchases-modal-list" class="divide-y divide-slate-100 dark:divide-slate-800/80">
+            <tr><td colspan="6" class="p-8 text-center text-slate-400 text-xs">Chargement...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex items-center justify-end pt-2 border-t border-slate-200/60 dark:border-slate-800">
+        <button type="button" onclick="document.getElementById('supplier-purchases-modal')?.classList.add('hidden')" class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-200 text-xs">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Order & Invoice Details -->
+  <div id="purchase-details-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-2xl w-full shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <h3 id="purchase-details-modal-title" class="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <span>📑</span> Détails Commande
+        </h3>
+        <button onclick="document.getElementById('purchase-details-modal')?.classList.add('hidden')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">✕</button>
+      </div>
+
+      <!-- Order Metadata -->
+      <div id="purchase-details-modal-meta"></div>
+
+      <!-- Line Items Table -->
+      <div class="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-900/60">
+        <table class="w-full text-xs text-left">
+          <thead class="bg-slate-50 dark:bg-slate-800/80 text-slate-400 text-[10px] uppercase font-bold tracking-wider border-b border-slate-200 dark:border-slate-800">
+            <tr>
+              <th class="p-3">Désignation</th>
+              <th class="p-3 text-center">Quantité</th>
+              <th class="p-3 text-right">P.U Achat</th>
+              <th class="p-3 text-right">Total Ligne</th>
+            </tr>
+          </thead>
+          <tbody id="purchase-details-modal-items" class="divide-y divide-slate-100 dark:divide-slate-800/80">
+            <tr><td colspan="4" class="p-8 text-center text-slate-400 text-xs">Chargement...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Totals Summary -->
+      <div class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
+        <div class="flex items-center gap-4">
+          <div>
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">Sous-Total</span>
+            <span id="purchase-details-subtotal" class="font-mono font-bold text-slate-800 dark:text-slate-200">0.00 DA</span>
+          </div>
+          <div>
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">Remise</span>
+            <span id="purchase-details-discount" class="font-mono font-bold text-amber-600 dark:text-amber-400">0.00 DA</span>
+          </div>
+        </div>
+        <div class="flex flex-col items-end">
+          <span class="text-[10px] text-indigo-500 uppercase font-bold">Total Net</span>
+          <span id="purchase-details-total" class="font-mono font-black text-indigo-600 dark:text-indigo-400 text-lg">0.00 DA</span>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end pt-2 border-t border-slate-200/60 dark:border-slate-800">
+        <button type="button" onclick="document.getElementById('purchase-details-modal')?.classList.add('hidden')" class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-200 text-xs">Fermer</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: ScanIQ Intelligent Invoice Scanner & Order Validation -->
   <div id="scaniq-validate-modal" class="hidden fixed inset-0 bg-slate-900/75 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4">
     <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 max-w-4xl w-full shadow-2xl flex flex-col gap-4 max-h-[94vh] overflow-y-auto">
