@@ -76,18 +76,25 @@
 
     return new Promise((resolve) => {
       const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      script.src = 'js/pdf.min.js';
       script.onload = () => {
         if (window.pdfjsLib) {
           try {
-            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'js/pdf.worker.min.js';
           } catch (e) {}
           resolve(window.pdfjsLib);
         } else {
           resolve(null);
         }
       };
-      script.onerror = () => resolve(null);
+      script.onerror = () => {
+        // Fallback to CDN if local bundle fails
+        const fallbackScript = document.createElement('script');
+        fallbackScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+        fallbackScript.onload = () => resolve(window.pdfjsLib || null);
+        fallbackScript.onerror = () => resolve(null);
+        document.head.appendChild(fallbackScript);
+      };
       document.head.appendChild(script);
     });
   }
@@ -342,19 +349,37 @@ Total TTC : 952.00 DA`);
     const items = [];
     let total = 0;
 
+    const partyMatch = text.match(/(?:^|\n)\s*(?:fournisseur|client|magasin|emetteur|émetteur|societe|société)\s*[:]?\s*([^\r\n]+)/i);
+    if (partyMatch) {
+      const candidate = partyMatch[1].trim();
+      if (candidate && !/^(inconnu|standard|comptoir|divers|aucun|client|fournisseur)$/i.test(candidate)) {
+        supplier = candidate;
+      }
+    }
+
     for (const line of lines) {
-      if (/sarl|grossiste|distributeur|papeterie/i.test(line) && supplier === 'Fournisseur Inconnu') {
+      if (supplier === 'Fournisseur Inconnu' && /sarl|grossiste|distributeur|papeterie/i.test(line)) {
         supplier = line.split('-')[0].trim();
       }
-      const invMatch = line.match(/(?:facture|bl|inv|n°)\s*[:#]?\s*([a-z0-9\-_/]+)/i);
-      if (invMatch) invoiceNumber = invMatch[1].trim();
+      const invMatch = line.match(/(?:ticket|facture|bl|inv|n°|recu|reçu)\s*[:#.-]?\s*([a-z0-9\-_/]+)/i);
+      if (invMatch && invoiceNumber.startsWith('FAC-')) {
+        const candidate = invMatch[1].trim();
+        if (!/^(proforma|avoir|standard|client|fournisseur|date|du|le)$/i.test(candidate)) {
+          invoiceNumber = candidate;
+        }
+      }
 
-      const dateMatch = line.match(/(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/);
+      const dateMatch = line.match(/(?:date(?:\s*d['’]émission)?|du|le)?\s*[:]?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/i);
       if (dateMatch) {
         const p = dateMatch[1].split(/[./-]/);
         if (p.length === 3) {
           date = `${p[2].length === 2 ? '20' + p[2] : p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`;
         }
+      }
+
+      // Skip summary / total / footer lines
+      if (/(total\s*ht|total\s*ttc|total\s*commande|montant\s*ht|montant\s*total|sous\s*total|\btva\b|net\s*a\s*payer|acompte|reste\s*a\s*payer|mode\s*de\s*reglement|arrete\s*la\s*presente|nif\b|tel\b|rc\b|merci\s*pour)/i.test(line)) {
+        continue;
       }
 
       const parts = line.split(/[|\t]+/).map(p => p.trim());
@@ -375,7 +400,7 @@ Total TTC : 952.00 DA`);
         }
       }
 
-      // Space-delimited table lines with trailing numbers
+      // Space-delimited table lines with 3 numbers (Qty, Price, Total)
       const stdMatch = line.match(/^(?:(\d+[\.\)-]?\s+))?(.*?)\s+(\d+(?:[.,]\d+)?)\s+([\d\s.,]+?)\s+([\d\s.,]+)$/);
       if (stdMatch) {
         const desc = (stdMatch[2] || '').trim();
@@ -390,6 +415,31 @@ Total TTC : 952.00 DA`);
             unitPrice: price,
             total: lineTot > 0 ? lineTot : qty * price,
             confidence: 90
+          });
+          continue;
+        }
+      }
+
+      // Space-delimited table lines with 2 numbers (Qty, Total or Qty, Price)
+      const twoNumsMatch = line.match(/^(?:(\d+[\.\)-]?\s+))?(.*?)\s+(\d+(?:[.,]\d+)?)\s+([\d\s.,]+)$/);
+      if (twoNumsMatch) {
+        const desc = (twoNumsMatch[2] || '').trim();
+        const qty = parseFloat(twoNumsMatch[3].replace(',', '.')) || 1;
+        const val = parseFloat(twoNumsMatch[4].replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+        if (desc && desc.length >= 2 && !/total|tva|net|tableau/i.test(desc) && qty > 0 && val > 0) {
+          let unitPrice = val;
+          let lineTotal = qty * val;
+          if (val >= 100 && qty > 1) {
+            lineTotal = val;
+            unitPrice = Math.round((val / qty) * 100) / 100;
+          }
+          items.push({
+            description: desc,
+            rawDescription: desc,
+            quantity: qty,
+            unitPrice: unitPrice,
+            total: lineTotal,
+            confidence: 85
           });
         }
       }

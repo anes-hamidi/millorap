@@ -3066,12 +3066,12 @@
     }
   </script>
   <script src="js/pdf-lib.min.js"></script>
-  <!-- Client-Side Document Intelligence Libraries (PDF.js Text Layer & Tesseract OCR) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" onerror="console.warn('PDF.js CDN offline fallback active')"></script>
+  <!-- Client-Side Document Intelligence Libraries (100% Offline Local PDF.js & OCR) -->
+  <script src="js/pdf.min.js"></script>
   <script>
     if (typeof pdfjsLib !== 'undefined') {
       try {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'js/pdf.worker.min.js';
       } catch (e) {}
     }
   </script>
