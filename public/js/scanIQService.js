@@ -446,8 +446,7 @@ Total TTC : 952.00 DA`);
     }
 
     const subtotal = items.reduce((s, i) => s + (i.total || i.quantity * i.unitPrice), 0);
-    const vat = Math.round(subtotal * 0.19 * 100) / 100;
-    total = subtotal + vat;
+    total = subtotal;
 
     return {
       supplier,
@@ -456,10 +455,21 @@ Total TTC : 952.00 DA`);
       date,
       items,
       subtotal,
-      vat,
+      discount: 0,
+      vat: 0,
       total,
       confidence: 85
     };
+  }
+
+  function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   function localCatalogMatch(items, products) {
@@ -480,6 +490,8 @@ Total TTC : 952.00 DA`);
 
       return {
         ...item,
+        packMultiplier: item.packMultiplier || 1,
+        discount: item.discount || 0,
         matchedProductId: tier !== 'unmatched' && best ? best.id : null,
         matchedProduct: tier !== 'unmatched' && best ? {
           id: best.id,
@@ -500,164 +512,477 @@ Total TTC : 952.00 DA`);
   // SCANEYE ANIMATED VALIDATION MODAL & UI RENDERING
   // ---------------------------------------------------------------------------
 
+  function renderPriceDiffBadge(item, matchedProduct) {
+    if (!matchedProduct || !matchedProduct.costPrice || matchedProduct.costPrice <= 0) {
+      return '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">ℹ️ Nouveau prix</span>';
+    }
+
+    const currentEnteredPrice = parseFloat(item.unitPrice) || 0;
+    const packMult = parseFloat(item.packMultiplier) || 1;
+    const effectiveUnitCost = packMult > 1 ? (currentEnteredPrice / packMult) : currentEnteredPrice;
+    const oldCost = parseFloat(matchedProduct.costPrice) || 0;
+    const diff = effectiveUnitCost - oldCost;
+
+    if (Math.abs(diff) < 0.01) {
+      return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800" title="Prix catalogue inchangé">🟢 Inchangé (${oldCost.toFixed(2)} DA)</span>`;
+    }
+
+    const pct = Math.round((diff / oldCost) * 100);
+    if (diff > 0) {
+      return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800" title="Ancien prix catalogue: ${oldCost.toFixed(2)} DA">🔺 +${diff.toFixed(2)} DA (+${pct}%)</span>`;
+    } else {
+      return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-800" title="Ancien prix catalogue: ${oldCost.toFixed(2)} DA">🔻 ${diff.toFixed(2)} DA (${pct}%)</span>`;
+    }
+  }
+
   async function renderScanValidationModal(scanData) {
+    if (!scanData) return;
+    activeScanData = scanData;
+
     const modal = document.getElementById('scaniq-validate-modal');
     if (!modal) return;
 
     modal.classList.remove('hidden');
 
+    // Sync raw text editor
+    const rawEditor = document.getElementById('scaniq-raw-text-editor');
+    if (rawEditor) {
+      rawEditor.value = rawInvoiceText || '';
+    }
+
     // Populate suppliers dropdown
     const suppliersSelect = document.getElementById('scaniq-supplier-select');
-    const allSuppliers = await window.SupplierService.getAllSuppliers();
+    let allSuppliers = [];
+    try {
+      if (window.SupplierService?.getAllSuppliers) {
+        allSuppliers = await window.SupplierService.getAllSuppliers();
+      } else if (window.FlexiDB?.db?.suppliers) {
+        allSuppliers = await window.FlexiDB.db.suppliers.toArray();
+      }
+    } catch (e) {
+      console.warn('[ScanIQ] Supplier fetch notice:', e);
+    }
+
+    let isMatchedSupplier = false;
     if (suppliersSelect) {
-      suppliersSelect.innerHTML = '<option value="">-- Sélectionner un fournisseur --</option>' +
-        allSuppliers.map(s => `<option value="${s.id}" ${cleanString(s.name) === cleanString(scanData.supplier) ? 'selected' : ''}>${s.name}</option>`).join('') +
-        '<option value="__NEW__">➕ Créer nouveau fournisseur...</option>';
+      const options = ['<option value="">-- Sélectionner un fournisseur --</option>'];
+      allSuppliers.forEach(s => {
+        const isMatch = cleanString(s.name) === cleanString(scanData.supplier);
+        if (isMatch) isMatchedSupplier = true;
+        options.push(`<option value="${s.id}" ${isMatch ? 'selected' : ''}>${escapeHtml(s.name)}</option>`);
+      });
+      options.push('<option value="__NEW__">➕ Créer nouveau fournisseur...</option>');
+      suppliersSelect.innerHTML = options.join('');
+    }
+
+    const customSupplierInput = document.getElementById('scaniq-custom-supplier-input');
+    if (customSupplierInput) {
+      if (!isMatchedSupplier && scanData.supplier && scanData.supplier !== 'Fournisseur Inconnu') {
+        suppliersSelect.value = '__NEW__';
+        customSupplierInput.value = scanData.supplier;
+        customSupplierInput.classList.remove('hidden');
+      } else {
+        customSupplierInput.classList.add('hidden');
+      }
     }
 
     // Set invoice header fields
     const invNumInput = document.getElementById('scaniq-invoice-number');
     const invDateInput = document.getElementById('scaniq-invoice-date');
+    const globalDiscInput = document.getElementById('scaniq-global-discount');
+
     if (invNumInput) invNumInput.value = scanData.invoiceNumber || '';
     if (invDateInput) invDateInput.value = scanData.date || new Date().toISOString().slice(0, 10);
+    if (globalDiscInput) globalDiscInput.value = scanData.globalDiscount || scanData.discount || 0;
 
     // Update overall confidence pill
     const overallConfidence = document.getElementById('scaniq-overall-confidence');
     if (overallConfidence) {
       overallConfidence.innerText = `${scanData.confidence || 85}% Confiance`;
-      overallConfidence.className = `px-2.5 py-1 rounded-full text-xs font-bold ${
-        scanData.confidence >= 80 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' :
-        scanData.confidence >= 50 ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' :
+      overallConfidence.className = `px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+        (scanData.confidence || 85) >= 80 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' :
+        (scanData.confidence || 85) >= 50 ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' :
         'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
       }`;
     }
 
-    // Render line items with "Scaneye" sequential radar effect
+    // Render line items
     const itemsContainer = document.getElementById('scaniq-items-container');
     if (!itemsContainer) return;
     itemsContainer.innerHTML = '';
 
     const catalogProducts = await window.FlexiDB.db.products.toArray();
 
-    // Animate items populating one by one
-    scanData.items.forEach((item, index) => {
-      setTimeout(() => {
-        const itemRow = document.createElement('div');
-        itemRow.id = `scaniq-item-row-${index}`;
-        itemRow.className = 'p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 shadow-sm flex flex-col gap-2.5 transition-all duration-300 transform translate-y-2 opacity-0 animate-fade-in';
+    (scanData.items || []).forEach((item, index) => {
+      item.packMultiplier = item.packMultiplier || 1;
+      item.discount = item.discount || 0;
 
-        const tierBadge = item.matchTier === 'high' ?
-          '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">🟢 Match 95%+</span>' :
-          (item.matchTier === 'medium' ?
-          '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">🟡 Suggestion (' + item.matchScore + '%)</span>' :
-          '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700">🔴 Nouvel Article</span>');
+      const itemRow = document.createElement('div');
+      itemRow.id = `scaniq-item-row-${index}`;
+      itemRow.className = 'p-3 sm:p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 shadow-sm flex flex-col gap-3 transition-all duration-200';
 
-        itemRow.innerHTML = `
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2 flex-1 min-w-0">
-              <span class="text-base">${item.matchedProduct ? (item.matchedProduct.icon || '📦') : '📄'}</span>
-              <div class="flex flex-col min-w-0 flex-1">
-                <div class="flex items-center gap-2">
-                  <strong class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtml(item.description)}</strong>
-                  ${tierBadge}
-                </div>
-                <span class="text-[10px] text-slate-400">Extrait de la facture : "${escapeHtml(item.rawDescription || item.description)}"</span>
-              </div>
-            </div>
-            <button type="button" onclick="window.ScanIQService.removeItemRow(${index})" class="p-1 text-slate-400 hover:text-rose-500 text-sm transition" title="Supprimer cet article">✕</button>
-          </div>
+      const tierBadge = item.matchTier === 'high' ?
+        '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">🟢 Match 95%+</span>' :
+        (item.matchTier === 'medium' ?
+        '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">🟡 Suggestion (' + (item.matchScore || 50) + '%)</span>' :
+        '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700">🔴 Nouveau</span>');
 
-          <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1">
-            <!-- Matched Catalog Product Selector -->
-            <div class="sm:col-span-2">
-              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Produit en Magasin</label>
-              <select id="scaniq-prod-select-${index}" onchange="window.ScanIQService.handleProductChange(${index}, this.value)" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none">
-                <option value="">-- Non lié (Créer nouveau) --</option>
-                ${catalogProducts.map(p => `<option value="${p.id}" ${item.matchedProductId === p.id ? 'selected' : ''}>${p.icon || '📦'} ${p.name} (${p.currentStock || 0} en stock)</option>`).join('')}
-              </select>
-            </div>
-
-            <!-- Quantity -->
-            <div>
-              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Quantité</label>
-              <input type="number" id="scaniq-qty-${index}" min="1" value="${item.quantity || 1}" onchange="window.ScanIQService.recalculateTotals()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono font-bold text-slate-800 dark:text-slate-100 outline-none">
-            </div>
-
-            <!-- Unit Cost -->
-            <div>
-              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Prix Achat HT (DA)</label>
-              <input type="number" id="scaniq-cost-${index}" min="0" step="1" value="${item.unitPrice || 0}" onchange="window.ScanIQService.recalculateTotals()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 outline-none">
+      itemRow.innerHTML = `
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+          <div class="flex items-center gap-2 flex-1 min-w-[220px]">
+            <span class="text-base">${item.matchedProduct ? (item.matchedProduct.icon || '📦') : '📄'}</span>
+            <div class="flex-1">
+              <input type="text" id="scaniq-desc-${index}" value="${escapeHtml(item.description || '')}"
+                oninput="window.ScanIQService.handleItemDescChange(${index}, this.value)"
+                placeholder="Désignation article..."
+                class="w-full px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
           </div>
-        `;
 
-        itemsContainer.appendChild(itemRow);
-        setTimeout(() => {
-          itemRow.classList.remove('translate-y-2', 'opacity-0');
-        }, 20);
+          <div class="flex items-center gap-2 flex-wrap">
+            ${tierBadge}
+            <span id="scaniq-price-diff-${index}">${renderPriceDiffBadge(item, item.matchedProduct)}</span>
+            <button type="button" onclick="window.ScanIQService.removeItemRow(${index})" class="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg text-sm transition" title="Supprimer cet article">✕</button>
+          </div>
+        </div>
 
-        recalculateTotals();
-      }, index * 120);
+        <div class="grid grid-cols-2 sm:grid-cols-12 gap-2 text-xs">
+          <!-- Produit en Magasin -->
+          <div class="col-span-2 sm:col-span-4">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Produit en Magasin</label>
+            <select id="scaniq-prod-select-${index}" onchange="window.ScanIQService.handleProductChange(${index}, this.value)" class="w-full px-2 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="">-- Non lié (Créer nouveau) --</option>
+              ${catalogProducts.map(p => `<option value="${p.id}" ${item.matchedProductId === p.id ? 'selected' : ''}>${p.icon || '📦'} ${escapeHtml(p.name)} (Stock: ${p.currentStock || 0} | Achat: ${p.costPrice || 0} DA)</option>`).join('')}
+            </select>
+          </div>
+
+          <!-- Conditionnement / Pack -->
+          <div class="col-span-1 sm:col-span-2">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Conditionnement</label>
+            <select id="scaniq-pack-${index}" onchange="window.ScanIQService.handlePackagingChange(${index}, this.value)" class="w-full px-2 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none">
+              <option value="1" ${(item.packMultiplier || 1) == 1 ? 'selected' : ''}>Unité (x1)</option>
+              <option value="5" ${item.packMultiplier == 5 ? 'selected' : ''}>Pack (x5)</option>
+              <option value="6" ${item.packMultiplier == 6 ? 'selected' : ''}>Pack (x6)</option>
+              <option value="10" ${item.packMultiplier == 10 ? 'selected' : ''}>Pack (x10)</option>
+              <option value="12" ${item.packMultiplier == 12 ? 'selected' : ''}>Douzaine (x12)</option>
+              <option value="20" ${item.packMultiplier == 20 ? 'selected' : ''}>Carton (x20)</option>
+              <option value="24" ${item.packMultiplier == 24 ? 'selected' : ''}>Carton (x24)</option>
+              <option value="50" ${item.packMultiplier == 50 ? 'selected' : ''}>Fardeau (x50)</option>
+              <option value="100" ${item.packMultiplier == 100 ? 'selected' : ''}>Gros (x100)</option>
+            </select>
+          </div>
+
+          <!-- Quantity -->
+          <div class="col-span-1 sm:col-span-2">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Quantité</label>
+            <input type="number" id="scaniq-qty-${index}" min="0.01" step="any" value="${item.quantity || 1}" oninput="window.ScanIQService.recalculateTotals()" class="w-full px-2 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono font-bold text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+
+          <!-- Unit Cost Price -->
+          <div class="col-span-1 sm:col-span-2">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">P.U Achat (DA)</label>
+            <input type="number" id="scaniq-cost-${index}" min="0" step="any" value="${item.unitPrice || 0}" oninput="window.ScanIQService.recalculateTotals()" class="w-full px-2 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+
+          <!-- Line Discount -->
+          <div class="col-span-1 sm:col-span-1">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Remise</label>
+            <input type="number" id="scaniq-discount-${index}" min="0" step="any" value="${item.discount || 0}" placeholder="0" oninput="window.ScanIQService.recalculateTotals()" class="w-full px-2 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono text-amber-600 dark:text-amber-400 outline-none">
+          </div>
+
+          <!-- Line Total -->
+          <div class="col-span-2 sm:col-span-1">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Total</label>
+            <input type="number" id="scaniq-linetotal-${index}" min="0" step="any" value="${(item.total || (item.quantity * item.unitPrice)).toFixed(2)}" oninput="window.ScanIQService.handleLineTotalChange(${index}, this.value)" class="w-full px-2 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-mono font-bold text-slate-800 dark:text-slate-100 outline-none">
+          </div>
+        </div>
+      `;
+
+      itemsContainer.appendChild(itemRow);
     });
 
-    // Update statistics display
+    recalculateTotals();
     updateLearningStatsBadge();
   }
 
-  function handleProductChange(index, productId) {
-    if (!activeScanData || !activeScanData.items[index]) return;
+  function handleItemDescChange(index, val) {
+    if (!activeScanData || !activeScanData.items || !activeScanData.items[index]) return;
+    activeScanData.items[index].description = val;
+  }
+
+  function handlePackagingChange(index, val) {
+    if (!activeScanData || !activeScanData.items || !activeScanData.items[index]) return;
+    activeScanData.items[index].packMultiplier = parseFloat(val) || 1;
+    recalculateTotals();
+  }
+
+  async function handleProductChange(index, productId) {
+    if (!activeScanData || !activeScanData.items || !activeScanData.items[index]) return;
     const item = activeScanData.items[index];
 
     if (productId) {
       item.matchedProductId = Number(productId);
       item.matchTier = 'high';
-      // Record correction to train local ML
+      const prod = await window.FlexiDB.db.products.get(Number(productId));
+      if (prod) {
+        item.matchedProduct = {
+          id: prod.id,
+          name: prod.name,
+          barcode: prod.barcode,
+          costPrice: prod.costPrice,
+          sellingPrice: prod.sellingPrice,
+          currentStock: prod.currentStock,
+          icon: prod.icon || '📦'
+        };
+      }
       recordCorrection('product_matching', item.description, `Product_ID_${productId}`);
-      celebrateLearningMicroToast(`Article associé au produit #${productId}`);
+      celebrateLearningMicroToast(`Article associé à "${prod ? prod.name : productId}"`);
     } else {
       item.matchedProductId = null;
+      item.matchedProduct = null;
       item.matchTier = 'unmatched';
     }
 
     recalculateTotals();
   }
 
+  function handleLineTotalChange(index, val) {
+    if (!activeScanData || !activeScanData.items || !activeScanData.items[index]) return;
+    const item = activeScanData.items[index];
+    const total = parseFloat(val) || 0;
+    const qtyInput = document.getElementById(`scaniq-qty-${index}`);
+    const qty = qtyInput ? (parseFloat(qtyInput.value) || 1) : (item.quantity || 1);
+    const discInput = document.getElementById(`scaniq-discount-${index}`);
+    const discount = discInput ? (parseFloat(discInput.value) || 0) : (item.discount || 0);
+
+    const grossNeeded = total + discount;
+    const unitPrice = qty > 0 ? (grossNeeded / qty) : 0;
+    item.unitPrice = Math.round(unitPrice * 100) / 100;
+    item.total = total;
+
+    const costInput = document.getElementById(`scaniq-cost-${index}`);
+    if (costInput) {
+      costInput.value = item.unitPrice;
+    }
+
+    recalculateTotals();
+  }
+
+  function handleSupplierSelectChange(val) {
+    const customInput = document.getElementById('scaniq-custom-supplier-input');
+    if (!customInput) return;
+    if (val === '__NEW__') {
+      customInput.classList.remove('hidden');
+      customInput.focus();
+    } else {
+      customInput.classList.add('hidden');
+    }
+  }
+
+  function addNewItemRow() {
+    if (!activeScanData) {
+      activeScanData = {
+        supplier: 'Fournisseur Inconnu',
+        invoiceNumber: 'FAC-' + Date.now().toString().slice(-6),
+        date: new Date().toISOString().slice(0, 10),
+        items: [],
+        subtotal: 0,
+        discount: 0,
+        total: 0,
+        confidence: 90
+      };
+    }
+    if (!activeScanData.items) activeScanData.items = [];
+
+    syncCurrentFormState();
+
+    activeScanData.items.push({
+      description: 'Nouvel article',
+      rawDescription: '',
+      quantity: 1,
+      unitPrice: 0,
+      packMultiplier: 1,
+      discount: 0,
+      total: 0,
+      matchTier: 'unmatched',
+      matchedProductId: null,
+      matchedProduct: null
+    });
+
+    renderScanValidationModal(activeScanData);
+  }
+
   function removeItemRow(index) {
     if (!activeScanData || !activeScanData.items) return;
+    syncCurrentFormState();
     activeScanData.items.splice(index, 1);
     renderScanValidationModal(activeScanData);
   }
 
-  function recalculateTotals() {
-    if (!activeScanData || !activeScanData.items) return;
-    let subtotal = 0;
+  function toggleRawTextPanel() {
+    const panel = document.getElementById('scaniq-raw-text-panel');
+    if (panel) {
+      panel.classList.toggle('hidden');
+      if (!panel.classList.contains('hidden')) {
+        const editor = document.getElementById('scaniq-raw-text-editor');
+        if (editor) {
+          editor.value = rawInvoiceText || '';
+          editor.focus();
+        }
+      }
+    }
+  }
 
+  async function reExtractFromCustomText() {
+    const editor = document.getElementById('scaniq-raw-text-editor');
+    const text = editor ? editor.value.trim() : '';
+    if (!text) {
+      if (window.showToast) window.showToast('Veuillez entrer du texte à analyser', 'warning');
+      return;
+    }
+
+    rawInvoiceText = text;
+    if (window.showToast) window.showToast('🔄 Ré-analyse du texte en cours...', 'info');
+
+    let structuredData = null;
+    try {
+      const resp = await fetch('/api/scan/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      if (resp.ok) {
+        const json = await resp.json();
+        structuredData = json.data;
+      }
+    } catch (e) {
+      console.warn('[ScanIQ] Re-extract server fallback:', e);
+    }
+
+    if (!structuredData) {
+      structuredData = fallbackLocalExtract(text);
+    }
+
+    if (classifierInstance && rawInvoiceText) {
+      const pred = classifierInstance.predict(rawInvoiceText);
+      if (pred && pred.supplier && pred.confidence > 50) {
+        structuredData.supplier = pred.supplier;
+        structuredData.supplierConfidence = pred.confidence;
+      }
+    }
+
+    const catalogProducts = await window.FlexiDB.db.products.toArray();
+    let matchedItems = [];
+    try {
+      const matchResp = await fetch('/api/scan/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: structuredData.items, products: catalogProducts })
+      });
+      if (matchResp.ok) {
+        const matchJson = await matchResp.json();
+        matchedItems = matchJson.items;
+      }
+    } catch (e) {
+      console.warn('[ScanIQ] Match server fallback:', e);
+    }
+
+    if (!matchedItems || !matchedItems.length) {
+      matchedItems = localCatalogMatch(structuredData.items, catalogProducts);
+    }
+
+    structuredData.items = matchedItems;
+    activeScanData = structuredData;
+
+    await renderScanValidationModal(activeScanData);
+    if (window.showToast) window.showToast('✅ Analyse terminée avec succès !');
+  }
+
+  function syncCurrentFormState() {
+    if (!activeScanData || !activeScanData.items) return;
     activeScanData.items.forEach((item, index) => {
+      const descInput = document.getElementById(`scaniq-desc-${index}`);
       const qtyInput = document.getElementById(`scaniq-qty-${index}`);
       const costInput = document.getElementById(`scaniq-cost-${index}`);
-      const qty = qtyInput ? (parseFloat(qtyInput.value) || 1) : item.quantity;
-      const cost = costInput ? (parseFloat(costInput.value) || 0) : item.unitPrice;
+      const packSelect = document.getElementById(`scaniq-pack-${index}`);
+      const discInput = document.getElementById(`scaniq-discount-${index}`);
+
+      if (descInput) item.description = descInput.value;
+      if (qtyInput) item.quantity = parseFloat(qtyInput.value) || 1;
+      if (costInput) item.unitPrice = parseFloat(costInput.value) || 0;
+      if (packSelect) item.packMultiplier = parseFloat(packSelect.value) || 1;
+      if (discInput) item.discount = parseFloat(discInput.value) || 0;
+    });
+
+    const invNumInput = document.getElementById('scaniq-invoice-number');
+    const invDateInput = document.getElementById('scaniq-invoice-date');
+    const globalDiscountInput = document.getElementById('scaniq-global-discount');
+
+    if (invNumInput) activeScanData.invoiceNumber = invNumInput.value;
+    if (invDateInput) activeScanData.date = invDateInput.value;
+    if (globalDiscountInput) activeScanData.globalDiscount = parseFloat(globalDiscountInput.value) || 0;
+  }
+
+  function recalculateTotals() {
+    if (!activeScanData || !activeScanData.items) return;
+    let grossSubtotal = 0;
+    let linesDiscount = 0;
+
+    activeScanData.items.forEach((item, index) => {
+      const descInput = document.getElementById(`scaniq-desc-${index}`);
+      const qtyInput = document.getElementById(`scaniq-qty-${index}`);
+      const costInput = document.getElementById(`scaniq-cost-${index}`);
+      const packSelect = document.getElementById(`scaniq-pack-${index}`);
+      const discInput = document.getElementById(`scaniq-discount-${index}`);
+      const lineTotInput = document.getElementById(`scaniq-linetotal-${index}`);
+
+      if (descInput) item.description = descInput.value;
+      const qty = qtyInput ? (parseFloat(qtyInput.value) || 0) : (item.quantity || 1);
+      const cost = costInput ? (parseFloat(costInput.value) || 0) : (item.unitPrice || 0);
+      const packMult = packSelect ? (parseFloat(packSelect.value) || 1) : (item.packMultiplier || 1);
+      const discount = discInput ? (parseFloat(discInput.value) || 0) : (item.discount || 0);
 
       item.quantity = qty;
       item.unitPrice = cost;
-      item.total = qty * cost;
-      subtotal += item.total;
+      item.packMultiplier = packMult;
+      item.discount = discount;
+
+      const lineGross = qty * cost;
+      const lineNet = Math.max(0, lineGross - discount);
+      item.total = lineNet;
+
+      if (lineTotInput && document.activeElement !== lineTotInput) {
+        lineTotInput.value = lineNet.toFixed(2);
+      }
+
+      // Update row price difference badge live
+      const diffEl = document.getElementById(`scaniq-price-diff-${index}`);
+      if (diffEl) {
+        diffEl.innerHTML = renderPriceDiffBadge(item, item.matchedProduct);
+      }
+
+      grossSubtotal += lineGross;
+      linesDiscount += discount;
     });
 
-    const vat = Math.round(subtotal * 0.19 * 100) / 100;
-    const total = subtotal + vat;
+    const globalDiscountInput = document.getElementById('scaniq-global-discount');
+    const globalDiscount = globalDiscountInput ? (parseFloat(globalDiscountInput.value) || 0) : (activeScanData.globalDiscount || 0);
+    const totalDiscount = linesDiscount + globalDiscount;
+    const netTotal = Math.max(0, grossSubtotal - totalDiscount);
 
-    activeScanData.subtotal = subtotal;
-    activeScanData.vat = vat;
-    activeScanData.total = total;
+    activeScanData.subtotal = grossSubtotal;
+    activeScanData.discount = totalDiscount;
+    activeScanData.globalDiscount = globalDiscount;
+    activeScanData.vat = 0;
+    activeScanData.total = netTotal;
 
     const subtotalEl = document.getElementById('scaniq-subtotal-display');
-    const vatEl = document.getElementById('scaniq-vat-display');
+    const discountEl = document.getElementById('scaniq-discount-display');
     const totalEl = document.getElementById('scaniq-total-display');
 
-    if (subtotalEl) subtotalEl.innerText = `${subtotal.toFixed(2)} DA`;
-    if (vatEl) vatEl.innerText = `${vat.toFixed(2)} DA`;
-    if (totalEl) totalEl.innerText = `${total.toFixed(2)} DA`;
+    if (subtotalEl) subtotalEl.innerText = `${grossSubtotal.toFixed(2)} DA`;
+    if (discountEl) discountEl.innerText = `${totalDiscount.toFixed(2)} DA`;
+    if (totalEl) totalEl.innerText = `${netTotal.toFixed(2)} DA`;
   }
 
   // ---------------------------------------------------------------------------
@@ -680,11 +1005,13 @@ Total TTC : 952.00 DA`);
   }
 
   async function updateLearningStatsBadge() {
-    const stats = await window.FlexiDB.getLearningStats();
-    const statEl = document.getElementById('scaniq-learning-stat-badge');
-    if (statEl) {
-      statEl.innerText = `🧠 ${stats.correctionsCount} apprentissages · ${stats.accuracyRate}% précision`;
-    }
+    try {
+      const stats = await window.FlexiDB.getLearningStats();
+      const statEl = document.getElementById('scaniq-learning-stat-badge');
+      if (statEl) {
+        statEl.innerText = `🧠 ${stats.correctionsCount || 0} apprentissages · ${stats.accuracyRate || 95}% précision`;
+      }
+    } catch (e) {}
   }
 
   // ---------------------------------------------------------------------------
@@ -699,61 +1026,84 @@ Total TTC : 952.00 DA`);
     const d = window.FlexiDB.db;
     if (!d) throw new Error('Base de données non disponible');
 
-    const supplierSelect = document.getElementById('scaniq-supplier-select');
-    const supplierId = supplierSelect ? supplierSelect.value : null;
-    let supplierName = activeScanData.supplier;
+    syncCurrentFormState();
+    recalculateTotals();
 
-    if (supplierId && supplierId !== '__NEW__') {
-      const sup = await d.suppliers.get(Number(supplierId));
+    const supplierSelect = document.getElementById('scaniq-supplier-select');
+    const customSupplierInput = document.getElementById('scaniq-custom-supplier-input');
+    const selectedSupplierVal = supplierSelect ? supplierSelect.value : null;
+    let supplierName = activeScanData.supplier || 'Fournisseur Inconnu';
+    let supplierId = null;
+
+    if (selectedSupplierVal === '__NEW__' && customSupplierInput && customSupplierInput.value.trim()) {
+      supplierName = customSupplierInput.value.trim();
+    } else if (selectedSupplierVal && selectedSupplierVal !== '__NEW__') {
+      supplierId = Number(selectedSupplierVal);
+      const sup = await d.suppliers.get(supplierId);
       if (sup) supplierName = sup.name;
     }
 
-    const invNum = document.getElementById('scaniq-invoice-number')?.value || activeScanData.invoiceNumber;
-    const invDate = document.getElementById('scaniq-invoice-date')?.value || activeScanData.date;
+    const invNum = document.getElementById('scaniq-invoice-number')?.value || activeScanData.invoiceNumber || ('FAC-' + Date.now().toString().slice(-6));
+    const invDate = document.getElementById('scaniq-invoice-date')?.value || activeScanData.date || new Date().toISOString().slice(0, 10);
     const now = new Date().toISOString();
 
-    // Check for supplier correction
-    if (cleanString(supplierName) !== cleanString(activeScanData.supplier)) {
+    // Check for supplier correction / retraining
+    if (supplierName && cleanString(supplierName) !== cleanString(activeScanData.supplier)) {
       recordCorrection('supplier_name', activeScanData.supplier, supplierName);
       if (classifierInstance && rawInvoiceText) {
         classifierInstance.incrementalTrain(supplierName, rawInvoiceText);
       }
     }
 
-    // Save corrections to Dexie
-    for (const corr of trackedCorrections) {
-      await window.FlexiDB.logCorrection({
-        ...corr,
-        supplierId: supplierId ? Number(supplierId) : null
-      });
-    }
-
     // Atomic transaction for Restocking
-    await d.transaction('rw', [d.purchases, d.products, d.stockLogs, d.corrections], async () => {
+    await d.transaction('rw', [d.purchases, d.products, d.stockLogs, d.corrections, d.suppliers], async () => {
+      // 0. Auto-create supplier if new and doesn't exist
+      if (!supplierId && supplierName && supplierName !== 'Fournisseur Inconnu') {
+        const existingSup = await d.suppliers.where('name').equalsIgnoreCase(supplierName).first();
+        if (existingSup) {
+          supplierId = existingSup.id;
+        } else {
+          supplierId = await d.suppliers.add({
+            name: supplierName,
+            phone: '',
+            email: '',
+            address: '',
+            notes: 'Créé automatiquement via ScanIQ',
+            createdAt: now,
+            updatedAt: now
+          });
+        }
+      }
+
       // 1. Save purchase record
       await d.purchases.add({
-        supplierId: supplierId && supplierId !== '__NEW__' ? Number(supplierId) : null,
+        supplierId: supplierId || null,
         supplierName,
         invoiceNumber: invNum,
         date: invDate,
         items: activeScanData.items,
         subtotal: activeScanData.subtotal,
-        vat: activeScanData.vat,
+        discount: activeScanData.discount || 0,
+        vat: 0,
         total: activeScanData.total,
         createdAt: now
       });
 
-      // 2. Increment stock for matched products
+      // 2. Increment stock for products
       for (const item of activeScanData.items) {
+        const packMult = Number(item.packMultiplier) || 1;
+        const qtyEntered = Number(item.quantity) || 1;
+        const unitsToAdd = qtyEntered * packMult;
+        const unitCostPrice = packMult > 1 ? (Number(item.unitPrice) / packMult) : Number(item.unitPrice);
+
         if (item.matchedProductId) {
           const prod = await d.products.get(item.matchedProductId);
           const prevStock = prod ? (Number(prod.currentStock) || 0) : 0;
-          const qtyToAdd = Number(item.quantity) || 1;
 
           await d.products.where('id').equals(item.matchedProductId).modify(p => {
-            p.currentStock = (Number(p.currentStock) || 0) + qtyToAdd;
-            if (Number(item.unitPrice) > 0) {
-              p.costPrice = Number(item.unitPrice);
+            p.currentStock = (Number(p.currentStock) || 0) + unitsToAdd;
+            if (unitCostPrice > 0) {
+              p.costPrice = Math.round(unitCostPrice * 100) / 100;
             }
             p.updatedAt = now;
           });
@@ -763,20 +1113,53 @@ Total TTC : 952.00 DA`);
             productId: item.matchedProductId,
             timestamp: now,
             type: 'RESTOCK',
-            quantityChange: qtyToAdd,
+            quantityChange: unitsToAdd,
             previousStock: prevStock,
-            newStock: prevStock + qtyToAdd,
+            newStock: prevStock + unitsToAdd,
             referenceId: `INV_${invNum}`,
-            note: `Réception Facture ScanIQ #${invNum} (${supplierName})`
+            note: `Réception ScanIQ #${invNum} (${supplierName}) - ${qtyEntered} ${packMult > 1 ? 'pack(s) x' + packMult : 'unité(s)'}`
+          });
+        } else if (item.description && item.description.trim()) {
+          // Auto-create newly entered product in catalog
+          const newProdId = await d.products.add({
+            name: item.description.trim(),
+            category: 'General',
+            unit: 'U',
+            costPrice: Math.round(unitCostPrice * 100) / 100,
+            sellingPrice: Math.round(unitCostPrice * 1.3 * 100) / 100,
+            currentStock: unitsToAdd,
+            minStockAlert: 5,
+            icon: '📦',
+            createdAt: now,
+            updatedAt: now
+          });
+
+          await d.stockLogs.add({
+            productId: newProdId,
+            timestamp: now,
+            type: 'RESTOCK',
+            quantityChange: unitsToAdd,
+            previousStock: 0,
+            newStock: unitsToAdd,
+            referenceId: `INV_${invNum}`,
+            note: `Nouveau produit créé via ScanIQ #${invNum}`
           });
         }
+      }
+
+      // 3. Save corrections to Dexie
+      for (const corr of trackedCorrections) {
+        await d.corrections.add({
+          ...corr,
+          supplierId: supplierId || null
+        });
       }
     });
 
     // Close modal
     document.getElementById('scaniq-validate-modal')?.classList.add('hidden');
     if (window.showToast) {
-      window.showToast(`✅ Facture #${invNum} validée et stock réapprovisionné avec succès !`);
+      window.showToast(`✅ Commande #${invNum} validée et stock mis à jour (${activeScanData.total.toFixed(2)} DA) !`);
     }
 
     // Refresh views
@@ -794,7 +1177,14 @@ Total TTC : 952.00 DA`);
     simulateOrRunLocalOCR,
     renderScanValidationModal,
     handleProductChange,
+    handlePackagingChange,
+    handleItemDescChange,
+    handleLineTotalChange,
+    handleSupplierSelectChange,
+    addNewItemRow,
     removeItemRow,
+    toggleRawTextPanel,
+    reExtractFromCustomText,
     recalculateTotals,
     commitScannedOrder,
     getClassifier: () => classifierInstance,

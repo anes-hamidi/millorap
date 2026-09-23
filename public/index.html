@@ -2952,10 +2952,10 @@
   </div>
 
   <!-- MODAL: ScanIQ Intelligent Invoice Scanner & Order Validation -->
-  <div id="scaniq-validate-modal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
-    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-3xl w-full shadow-2xl flex flex-col gap-4 max-h-[92vh] overflow-y-auto">
+  <div id="scaniq-validate-modal" class="hidden fixed inset-0 bg-slate-900/75 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 max-w-4xl w-full shadow-2xl flex flex-col gap-4 max-h-[94vh] overflow-y-auto">
       
-      <!-- Header -->
+      <!-- Modal Header -->
       <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center text-white text-xl shadow-lg shadow-indigo-500/25">
@@ -2963,90 +2963,128 @@
           </div>
           <div>
             <div class="flex items-center gap-2">
-              <h3 class="text-base font-extrabold text-slate-800 dark:text-slate-100">ScanIQ — Validation Facture Fournisseur</h3>
-              <span id="scaniq-overall-confidence" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">92% Confiance</span>
+              <h3 class="text-base font-extrabold text-slate-800 dark:text-slate-100">ScanIQ — Contrôle & Validation Commande</h3>
+              <span id="scaniq-overall-confidence" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">95% Confiance</span>
             </div>
-            <p class="text-[11px] text-slate-400">Reconnaissance optique & intelligence locale 100% Hors-Ligne</p>
+            <p class="text-[11px] text-slate-400">Édition libre · Correspondance catalogue · Détection des prix d'achat</p>
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <span id="scaniq-learning-stat-badge" class="hidden sm:inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">🧠 0 apprentissages · 85% précision</span>
-          <button onclick="document.getElementById('scaniq-validate-modal')?.classList.add('hidden')" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg transition">✕</button>
+          <button type="button" onclick="window.ScanIQService.toggleRawTextPanel()" class="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center gap-1.5 transition" title="Afficher ou modifier le texte brut extrait">
+            <span>📝</span> <span>Texte Brut</span>
+          </button>
+          <span id="scaniq-learning-stat-badge" class="hidden sm:inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">🧠 0 apprentissages</span>
+          <button type="button" onclick="document.getElementById('scaniq-validate-modal')?.classList.add('hidden')" class="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg transition">✕</button>
         </div>
       </div>
 
-      <!-- Invoice Metadata Form -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 text-xs">
-        <div>
-          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Fournisseur Détecté *</label>
-          <select id="scaniq-supplier-select" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
+      <!-- Raw Extracted Text Viewer / Editor Accordion (Collapsible) -->
+      <div id="scaniq-raw-text-panel" class="hidden flex flex-col gap-2 p-3.5 bg-slate-100/90 dark:bg-slate-800/90 rounded-2xl border border-slate-300 dark:border-slate-700 transition-all">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+            <span>🔍</span> <span>Texte Brut Extrait du Document (Éditable)</span>
+          </span>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="window.ScanIQService.reExtractFromCustomText()" class="btn-gradient text-white px-3 py-1 rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm">
+              <span>🔄</span> <span>Ré-analyser ce texte</span>
+            </button>
+            <button type="button" onclick="window.ScanIQService.toggleRawTextPanel()" class="text-xs text-slate-400 hover:text-slate-600 font-bold px-1.5">Fermer</button>
+          </div>
+        </div>
+        <textarea id="scaniq-raw-text-editor" rows="6" placeholder="Collez ou modifiez le texte de la facture ici..." class="w-full p-2.5 font-mono text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+      </div>
+
+      <!-- Invoice Metadata Form (Full Control) -->
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 text-xs">
+        <!-- Supplier Select -->
+        <div class="sm:col-span-1">
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Fournisseur / Émetteur *</label>
+          <select id="scaniq-supplier-select" onchange="window.ScanIQService.handleSupplierSelectChange(this.value)" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
             <option value="">Chargement des fournisseurs...</option>
           </select>
+          <input type="text" id="scaniq-custom-supplier-input" placeholder="Nom du nouveau fournisseur..." class="hidden mt-1.5 w-full px-3 py-1.5 rounded-xl border border-indigo-300 dark:border-indigo-700 bg-indigo-50/50 dark:bg-slate-900 font-bold text-slate-800 dark:text-slate-200 text-xs outline-none">
         </div>
 
+        <!-- Invoice / Ticket Number -->
         <div>
-          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">N° Facture / BL *</label>
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">N° Facture / BL / Ticket *</label>
           <input type="text" id="scaniq-invoice-number" placeholder="FAC-2024-001" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono font-bold text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
         </div>
 
+        <!-- Date -->
         <div>
           <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Date Facture</label>
           <input type="date" id="scaniq-invoice-date" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500">
         </div>
+
+        <!-- Global Discount / Remise -->
+        <div>
+          <label class="block font-bold text-slate-700 dark:text-slate-300 mb-1">Remise Globale (DA)</label>
+          <input type="number" id="scaniq-global-discount" min="0" step="1" value="0" placeholder="0.00" oninput="window.ScanIQService.recalculateTotals()" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono font-bold text-amber-600 dark:text-amber-400 outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
       </div>
 
-      <!-- Line Items Section with Scanning Radar Animation -->
+      <!-- Line Items Section with Full Controls -->
       <div class="flex flex-col gap-2">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <span class="font-bold text-slate-700 dark:text-slate-300 text-xs uppercase tracking-wider">Articles Détectés & Correspondance Stock</span>
+            <span class="font-bold text-slate-700 dark:text-slate-300 text-xs uppercase tracking-wider">Articles Commandés & Correspondance Stock</span>
             <div class="flex items-center gap-1.5 text-[10px]">
               <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span class="text-slate-400">Auto-match</span>
+              <span class="text-slate-400">Match 95%+</span>
               <span class="inline-block w-2 h-2 rounded-full bg-amber-500 ml-1"></span>
               <span class="text-slate-400">Suggestion</span>
               <span class="inline-block w-2 h-2 rounded-full bg-rose-500 ml-1"></span>
               <span class="text-slate-400">Nouveau</span>
             </div>
           </div>
+          <button type="button" onclick="window.ScanIQService.addNewItemRow()" class="px-3 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900 flex items-center gap-1 transition">
+            <span>➕</span> <span>Ajouter Article</span>
+          </button>
         </div>
 
-        <div id="scaniq-items-container" class="flex flex-col gap-2.5 max-h-72 overflow-y-auto pr-1">
-          <!-- Populated dynamically with Scaneye sequential animation -->
+        <div id="scaniq-items-container" class="flex flex-col gap-2.5 max-h-80 overflow-y-auto pr-1">
+          <!-- Populated dynamically with full editable row cards -->
         </div>
       </div>
 
-      <!-- Totals Bar -->
+      <!-- Totals Bar (Flexible, Without forced TVA) -->
       <div class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between text-xs">
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-6">
           <div>
-            <span class="text-[10px] uppercase font-bold text-slate-400 block">Total HT</span>
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Total Brut Lignes</span>
             <span id="scaniq-subtotal-display" class="font-mono font-bold text-slate-800 dark:text-slate-200 text-sm">0.00 DA</span>
           </div>
           <div>
-            <span class="text-[10px] uppercase font-bold text-slate-400 block">TVA (19%)</span>
-            <span id="scaniq-vat-display" class="font-mono font-bold text-slate-500 dark:text-slate-400 text-sm">0.00 DA</span>
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Remise Déduite</span>
+            <span id="scaniq-discount-display" class="font-mono font-bold text-amber-600 dark:text-amber-400 text-sm">0.00 DA</span>
           </div>
         </div>
 
         <div class="flex flex-col items-end">
-          <span class="text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400">Total TTC à Enregistrer</span>
+          <span class="text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400">Total Net à Enregistrer</span>
           <span id="scaniq-total-display" class="font-mono font-black text-indigo-600 dark:text-indigo-400 text-xl">0.00 DA</span>
         </div>
       </div>
 
       <p class="text-[11px] text-slate-400">
-        💡 <strong>Sans auto-validation aveugle :</strong> Vérifiez les lignes ci-dessus. En confirmant, le stock de chaque article lié sera immédiatement incrémenté avec un journal d'audit <strong>RESTOCK</strong>, et l'apprentissage local retiendra vos corrections pour la prochaine fois.
+        💡 <strong>Contrôle total :</strong> Modifiez les désignations, prix d'achat, quantités ou conditionnements (packs). Les alertes de prix détectent automatiquement les variations par rapport à votre catalogue.
       </p>
 
       <!-- Action Footer -->
-      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-800">
-        <button type="button" onclick="document.getElementById('scaniq-validate-modal')?.classList.add('hidden')" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 text-xs transition">
-          Annuler
+      <div class="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-slate-800">
+        <button type="button" onclick="window.ScanIQService.addNewItemRow()" class="px-3.5 py-2 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 text-xs flex items-center gap-1.5 transition">
+          <span>➕</span> <span>Ajouter un Article</span>
         </button>
-        <button type="button" onclick="window.ScanIQService.commitScannedOrder()" class="btn-gradient text-white px-5 py-2.5 rounded-xl text-xs font-extrabold shadow-lg shadow-indigo-600/25 flex items-center gap-2 transition hover:scale-105 active:scale-98">
-          <span>✓</span> <span>Valider & Mettre en Stock</span>
-        </button>
+
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="document.getElementById('scaniq-validate-modal')?.classList.add('hidden')" class="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 text-xs transition">
+            Annuler
+          </button>
+          <button type="button" onclick="window.ScanIQService.commitScannedOrder()" class="btn-gradient text-white px-5 py-2.5 rounded-xl text-xs font-extrabold shadow-lg shadow-indigo-600/25 flex items-center gap-2 transition hover:scale-105 active:scale-98">
+            <span>✓</span> <span>Valider & Mettre en Stock</span>
+          </button>
+        </div>
       </div>
 
     </div>
