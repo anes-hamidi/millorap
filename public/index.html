@@ -3066,6 +3066,16 @@
     }
   </script>
   <script src="js/pdf-lib.min.js"></script>
+  <!-- Client-Side Document Intelligence Libraries (PDF.js Text Layer & Tesseract OCR) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" onerror="console.warn('PDF.js CDN offline fallback active')"></script>
+  <script>
+    if (typeof pdfjsLib !== 'undefined') {
+      try {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      } catch (e) {}
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" onerror="console.warn('Tesseract.js CDN offline fallback active')"></script>
   <!-- API Origin Resolver (Tauri & Web) -->
   <script>
     window.API_BASE = (function() {

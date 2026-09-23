@@ -222,6 +222,43 @@ runTest('Incremental training learns a new supplier and increases prediction sco
 });
 
 // -----------------------------------------------------------------------------
+// TEST SUITE 5: REAL DIGITAL PDF & OCR UNSTRUCTURED TEXT INGESTION
+// -----------------------------------------------------------------------------
+console.log('\n📄 [Suite 5/5] Real Digital PDF & OCR Extracted Text Parsing');
+
+runTest('Real multi-line PDF text layer without pipes parses headers and line items correctly', () => {
+  const REAL_UNSTRUCTURED_INVOICE = `
+STE INDUSTRIELLE DES BOISSONS SARL
+12 Rue des Frères Bouadou, Bir Mourad Raïs, Alger
+NIF 099812345678901 RC 16/00-123456B16
+FACTURE PROFORMA N°: FP-2024-1102
+Date d'émission: 22/09/2024
+
+Tableau récapitulatif des livraisons:
+Réf Désignation Qté P.U HT Montant
+101 Café Espresso 100% Arabica 25 60.00 1500.00
+102 Thé Vert Naturel Menthe 10 40.00 400.00
+103 Croissant Frais Beurre 50 50.00 2500.00
+
+Sous-total HT: 4400.00 DA
+TVA 19%: 836.00 DA
+NET A PAYER: 5236.00 DA
+`;
+
+  const parsed = extractStructuredInvoiceData(REAL_UNSTRUCTURED_INVOICE);
+  assert.ok(parsed.items.length >= 3, `Expected at least 3 items, found ${parsed.items.length}`);
+  assert.strictEqual(parsed.invoiceNumber, 'FP-2024-1102');
+  assert.strictEqual(parsed.date, '2024-09-22');
+  assert.strictEqual(parsed.total, 5236);
+
+  // Match against catalog
+  const matched = matchItemsWithCatalog(parsed.items, SAMPLE_CATALOG);
+  assert.strictEqual(matched[0].matchedProductId, 1);
+  assert.strictEqual(matched[1].matchedProductId, 2);
+  assert.strictEqual(matched[2].matchedProductId, 3);
+});
+
+// -----------------------------------------------------------------------------
 // SUMMARY
 // -----------------------------------------------------------------------------
 console.log('\n📊 =========================================================');

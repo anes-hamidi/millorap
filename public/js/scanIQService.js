@@ -64,47 +64,70 @@
   }
 
   // ---------------------------------------------------------------------------
-  // PDF & FILE CAPTURE PIPELINE
+  // PDF & FILE CAPTURE PIPELINE (REAL PDF.JS TEXT LAYER & TESSERACT OCR)
   // ---------------------------------------------------------------------------
+
+  // Helper to dynamically load pdf.js if not already present on window
+  async function ensurePdfJsLoaded() {
+    if (window.pdfjsLib) return window.pdfjsLib;
+    if (typeof pdfjsLib !== 'undefined') return pdfjsLib;
+
+    if (typeof document === 'undefined') return null;
+
+    return new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      script.onload = () => {
+        if (window.pdfjsLib) {
+          try {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          } catch (e) {}
+          resolve(window.pdfjsLib);
+        } else {
+          resolve(null);
+        }
+      };
+      script.onerror = () => resolve(null);
+      document.head.appendChild(script);
+    });
+  }
+
+  // Helper to dynamically load Tesseract.js if not already present on window
+  async function ensureTesseractLoaded() {
+    if (window.Tesseract) return window.Tesseract;
+    if (typeof document === 'undefined') return null;
+
+    return new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+      script.onload = () => resolve(window.Tesseract || null);
+      script.onerror = () => resolve(null);
+      document.head.appendChild(script);
+    });
+  }
 
   async function processInvoiceFile(file) {
     if (!file) throw new Error('Aucun fichier sélectionné');
 
     const fileName = file.name || 'document';
-    const isPdf = file.type === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf');
-
     let extractedText = '';
-    let isDigital = false;
 
-    if (isPdf) {
-      // Check if digital PDF text can be extracted
+    // If file is explicitly plain text (.txt or text/plain)
+    if (file.type && file.type.startsWith('text/') && !fileName.toLowerCase().endsWith('.pdf')) {
       try {
-        const arrayBuffer = await file.arrayBuffer();
-        if (window.PDFLib && window.PDFLib.PDFDocument) {
-          const pdfDoc = await window.PDFLib.PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-          const pageCount = pdfDoc.getPageCount();
-          // Heuristic extraction for digital PDF
-          isDigital = pageCount > 0;
-        }
-      } catch (e) {
-        console.warn('[ScanIQ] PDF check warning:', e);
-      }
+        extractedText = await file.text();
+      } catch (e) {}
     }
 
-    // Read file text or base64
+    // Extract embedded text layer from digital PDF or execute client-side OCR / fallback
     if (!extractedText) {
-      if (file.type.startsWith('text/') || fileName.endsWith('.txt')) {
-        extractedText = await file.text();
-      } else {
-        // Generate simulated OCR extraction from image / scanned PDF
-        extractedText = await simulateOrRunLocalOCR(file);
-      }
+      extractedText = await simulateOrRunLocalOCR(file);
     }
 
     rawInvoiceText = extractedText;
     trackedCorrections = [];
 
-    // Step 1: Extract structured data
+    // Step 1: Extract structured data from the real extracted invoice text
     let structuredData = null;
     try {
       const resp = await fetch('/api/scan/extract', {
@@ -162,14 +185,83 @@
   }
 
   async function simulateOrRunLocalOCR(file) {
-    // Return sample text or perform local OCR
+    const fileName = (file.name || '').toLowerCase();
+    const isPdf = file.type === 'application/pdf' || fileName.endsWith('.pdf');
+
+    // 1. Digital PDF Embedded Text Layer Extraction (PDF.js)
+    if (isPdf) {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        let pdfjs = window.pdfjsLib || (typeof pdfjsLib !== 'undefined' ? pdfjsLib : null);
+        if (!pdfjs) {
+          pdfjs = await ensurePdfJsLoaded();
+        }
+
+        if (pdfjs && typeof pdfjs.getDocument === 'function') {
+          const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+          let fullText = '';
+
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            let lastY = null;
+            let pageText = '';
+            for (const item of textContent.items) {
+              if (lastY !== null && item.transform && Math.abs(item.transform[5] - lastY) > 5) {
+                pageText += '\n';
+              } else if (pageText.length > 0 && !pageText.endsWith(' ') && !pageText.endsWith('\n')) {
+                pageText += ' ';
+              }
+              pageText += item.str;
+              if (item.transform) lastY = item.transform[5];
+            }
+            fullText += pageText + '\n';
+          }
+
+          if (fullText.trim().length > 10) {
+            console.log(`[ScanIQ] Successfully extracted embedded PDF text layer (${fullText.length} chars)`);
+            return fullText;
+          }
+        }
+      } catch (e) {
+        console.warn('[ScanIQ] Digital PDF text extraction failed, falling back to OCR:', e);
+      }
+    }
+
+    // 2. Client-Side OCR with Tesseract.js (for images & scanned PDFs)
+    try {
+      let tesseract = window.Tesseract;
+      if (!tesseract) {
+        tesseract = await ensureTesseractLoaded();
+      }
+
+      if (tesseract && typeof tesseract.recognize === 'function') {
+        console.log('[ScanIQ] Running local Tesseract OCR on file...');
+        const { data: { text } } = await tesseract.recognize(file, 'fra+eng');
+        if (text && text.trim().length > 10) {
+          console.log(`[ScanIQ] Tesseract OCR extracted ${text.length} characters.`);
+          return text;
+        }
+      }
+    } catch (tessErr) {
+      console.warn('[ScanIQ] Tesseract OCR error / fallback:', tessErr);
+    }
+
+    // 3. Plain Text File Extraction Fallback
+    try {
+      if (typeof file.text === 'function') {
+        const rawText = await file.text();
+        if (rawText && rawText.trim().length > 10 && !rawText.includes('\u0000')) {
+          return rawText;
+        }
+      }
+    } catch (e) {}
+
+    // 4. Fixture / Demo Mock Fallback (when no text layer and offline without OCR engine)
     return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        // If file name matches known demo fixtures, return full realistic content
-        const lowerName = (file.name || '').toLowerCase();
-        if (lowerName.includes('papeterie') || lowerName.includes('paper')) {
-          resolve(`SARL ALGER PAPETERIE
+      const lowerName = (file.name || '').toLowerCase();
+      if (lowerName.includes('papeterie') || lowerName.includes('paper')) {
+        resolve(`SARL ALGER PAPETERIE
 Zone Industrielle Bab Ezzouar, Alger
 Tel: 023 12 34 56 - NIF: 001234567890123
 FACTURE N°: FAC-2024-089
@@ -183,8 +275,8 @@ Impression Document (Couleur) | 100 | 8.00 | 800.00
 Total HT : 7 200,00 DA
 TVA (19%) : 1 368,00 DA
 Total TTC : 8 568,00 DA`);
-        } else if (lowerName.includes('boisson') || lowerName.includes('cafe') || lowerName.includes('drink')) {
-          resolve(`GROSSISTE BOISSONS & CONFISERIE
+      } else if (lowerName.includes('boisson') || lowerName.includes('cafe') || lowerName.includes('drink')) {
+        resolve(`GROSSISTE BOISSONS & CONFISERIE
 Kouba, Alger - Tel: 0555 98 76 54
 Bon de Livraison / Facture N° BL-8842
 Date: 18/09/2024
@@ -198,8 +290,8 @@ Muffin Chocolat | 20 | 80.00 | 1600.00
 Montant HT : 4 400,00 DA
 TVA (19%) : 836,00 DA
 Net à Payer TTC : 5 236,00 DA`);
-        } else if (lowerName.includes('tech') || lowerName.includes('electro') || lowerName.includes('cable')) {
-          resolve(`DISTRIBUTEUR TECH & ACCESSOIRES
+      } else if (lowerName.includes('tech') || lowerName.includes('electro') || lowerName.includes('cable')) {
+        resolve(`DISTRIBUTEUR TECH & ACCESSOIRES
 Hydra, Alger - Tel: 0661 11 22 33
 FACTURE N° INV-7731
 Date: 20/09/2024
@@ -211,9 +303,9 @@ Câble USB-C Rapide | 15 | 280.00 | 4200.00
 Total HT : 12 200.00 DA
 TVA : 2 318.00 DA
 Total Général TTC : 14 518.00 DA`);
-        } else {
-          // Generic structured fallback
-          resolve(`FACTURE FOURNISSEUR N° FAC-${Date.now().toString().slice(-5)}
+      } else {
+        // Generic structured fallback
+        resolve(`FACTURE FOURNISSEUR N° FAC-${Date.now().toString().slice(-5)}
 Date: ${new Date().toISOString().slice(0, 10)}
 Fournisseur: Grossiste Boissons & Confiserie
 
@@ -224,9 +316,7 @@ Croissant Frais | 10 | 50.00 | 500.00
 Total HT : 800.00 DA
 TVA (19%) : 152.00 DA
 Total TTC : 952.00 DA`);
-        }
-      };
-      reader.readAsDataURL(file);
+      }
     });
   }
 
@@ -266,6 +356,26 @@ Total TTC : 952.00 DA`);
             unitPrice: price,
             total: parts[3] ? parseFloat(parts[3]) : qty * price,
             confidence: 85
+          });
+          continue;
+        }
+      }
+
+      // Space-delimited table lines with trailing numbers
+      const stdMatch = line.match(/^(?:(\d+[\.\)-]?\s+))?(.*?)\s+(\d+(?:[.,]\d+)?)\s+([\d\s.,]+?)\s+([\d\s.,]+)$/);
+      if (stdMatch) {
+        const desc = (stdMatch[2] || '').trim();
+        const qty = parseFloat(stdMatch[3].replace(',', '.')) || 1;
+        const price = parseFloat(stdMatch[4].replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+        const lineTot = parseFloat(stdMatch[5].replace(/[^\d.,]/g, '').replace(',', '.')) || (qty * price);
+        if (desc && desc.length >= 2 && !/total|tva|net|tableau/i.test(desc) && qty > 0 && price > 0) {
+          items.push({
+            description: desc,
+            rawDescription: desc,
+            quantity: qty,
+            unitPrice: price,
+            total: lineTot > 0 ? lineTot : qty * price,
+            confidence: 90
           });
         }
       }
@@ -617,6 +727,7 @@ Total TTC : 952.00 DA`);
   window.ScanIQService = {
     init: initScanIQ,
     processInvoiceFile,
+    simulateOrRunLocalOCR,
     renderScanValidationModal,
     handleProductChange,
     removeItemRow,

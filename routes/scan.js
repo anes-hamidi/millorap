@@ -163,16 +163,19 @@ function extractStructuredInvoiceData(rawText, supplierTemplate = null) {
   // 2. Invoice Number Extraction
   let invoiceNumber = '';
   const invNumberRegexes = [
-    /(?:facture|invoice|bl|bon\s*de\s*livraison|ref|n°|no|numéro)\s*[:#.-]?\s*([a-z0-9\-_/]{3,20})/i,
-    /(?:facture\s*n°?|fac\s*n°?)\s*[:]?\s*([a-z0-9\-_/]+)/i,
-    /(?:dz-inv|dz-po|inv|fact)-\d+/i
+    /(?:facture\s*(?:proforma|d'avoir|avoir)?|fac|invoice|bl|bon\s*de\s*livraison|ref|bon\s*de\s*reception)\s*(?:n°|no\.?|#|numéro)?\s*[:.-]?\s*([a-z0-9\-_/]{3,30})/i,
+    /(?:n°|no\.?|#)\s*[:.-]?\s*([a-z0-9\-_/]{3,30})/i,
+    /(?:dz-inv|dz-po|inv|fac|fact|fp|bl)-\d+/i
   ];
 
   for (const regex of invNumberRegexes) {
     const m = rawText.match(regex);
     if (m) {
-      invoiceNumber = (m[1] || m[0]).trim();
-      break;
+      const candidate = (m[1] || m[0]).trim();
+      if (!/^(proforma|avoir|standard|client|fournisseur|date|du|le)$/i.test(candidate)) {
+        invoiceNumber = candidate;
+        break;
+      }
     }
   }
   if (!invoiceNumber) {
@@ -182,9 +185,10 @@ function extractStructuredInvoiceData(rawText, supplierTemplate = null) {
   // 3. Date Extraction
   let invoiceDate = '';
   const dateRegexes = [
-    /(?:date|du|le)\s*[:]?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/i,
+    /(?:date(?:\s*d['’]émission|\s*de\s*facturation|\s*facture|\s*de\s*livraison)?|du|le)\s*[:]?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/i,
     /(\d{4}[./-]\d{1,2}[./-]\d{1,2})/,
-    /(\d{1,2}\s+(?:janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{4})/i
+    /(\d{1,2}\s+(?:janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{4})/i,
+    /(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/
   ];
 
   for (const regex of dateRegexes) {
@@ -252,12 +256,17 @@ function extractStructuredInvoiceData(rawText, supplierTemplate = null) {
     }
 
     // Detect end of table (totals section)
-    if (/(total\s*ht|total\s*ttc|net\s*a\s*payer|mode\s*de\s*reglement|arrete\s*la\s*presente)/.test(lower)) {
+    if (/(total\s*ht|total\s*ttc|montant\s*ht|montant\s*total|sous\s*total|\btva\b|net\s*a\s*payer|mode\s*de\s*reglement|arrete\s*la\s*presente)/.test(lower)) {
       isTableSection = false;
     }
 
-    // Pattern A: Single line with Description, Qty, UnitPrice, Total
-    // e.g. "Café Espresso 10 60.00 600.00" or "Croissant Frais | 5 | 50.00 DA | 250.00 DA"
+    // Skip summary / total / non-item lines
+    if (/(total\s*ht|total\s*ttc|montant\s*ht|montant\s*total|sous\s*total|\btva\b|net\s*a\s*payer|mode\s*de\s*reglement|arrete\s*la\s*presente|nif\b|tel\b|rc\b)/.test(lower)) {
+      continue;
+    }
+
+    // Pattern A: Single line with Description, Qty, UnitPrice, Total separated by pipes or tabs
+    // e.g. "Café Espresso | 10 | 60.00 | 600.00" or "Croissant Frais | 5 | 50.00 DA | 250.00 DA"
     const lineParts = line.split(/[|\t]+/).map(p => p.trim()).filter(Boolean);
 
     if (lineParts.length >= 3) {
@@ -280,16 +289,16 @@ function extractStructuredInvoiceData(rawText, supplierTemplate = null) {
       }
     }
 
-    // Pattern B: Regex regex pattern matching standard line
-    // e.g. "1. Rouleaux Papier Thermique (x5)   4   500,00   2 000,00"
-    const standardLineMatch = line.match(/^(\d+[\.\)-]?\s*)?([A-Za-zÀ-ÿ0-9\s()&/-]+?)\s+(\d+(?:[.,]\d+)?)\s+([\d\s.,]+?)\s+([\d\s.,]+)$/);
+    // Pattern B: Line ending with 3 numbers (Qty, Price, Total)
+    // e.g. "101 Café Espresso 100% Arabica 25 60.00 1500.00" or "1. Rouleaux Papier Thermique (x5) 4 500,00 2 000,00"
+    const standardLineMatch = line.match(/^(?:(\d+[\.\)-]?\s+))?(.*?)\s+(\d+(?:[.,]\d+)?)\s+([\d\s.,]+?)\s+([\d\s.,]+)$/);
     if (standardLineMatch) {
       const desc = (standardLineMatch[2] || '').trim();
       const qty = parseNumber(standardLineMatch[3]);
       const price = parseNumber(standardLineMatch[4]);
       const lineTotal = parseNumber(standardLineMatch[5]);
 
-      if (desc && desc.length > 2 && !/total|tva|net|banque/i.test(desc) && qty > 0) {
+      if (desc && desc.length >= 2 && !/total|sous-total|tva|net|banque|page|tableau/i.test(desc) && qty > 0 && price > 0) {
         extractedItems.push({
           rawDescription: desc,
           description: desc,
@@ -302,28 +311,24 @@ function extractStructuredInvoiceData(rawText, supplierTemplate = null) {
       }
     }
 
-    // Pattern C: If in table section, extract description with numbers
+    // Pattern C: If in table section, extract lines with 2 trailing numbers (Qty, Price)
     if (isTableSection) {
-      const nums = line.match(/[\d.,]+/g);
-      if (nums && nums.length >= 2) {
-        const descMatch = line.match(/^[^\d]+/);
-        const desc = descMatch ? descMatch[0].trim() : '';
-        if (desc && desc.length > 2 && !/total|tva|montant|remise/i.test(desc)) {
-          const parsedNums = nums.map(parseNumber).filter(n => n > 0);
-          if (parsedNums.length >= 2) {
-            const qty = parsedNums[0];
-            const price = parsedNums[1];
-            const lineTotal = parsedNums[2] || (qty * price);
+      const twoNumsMatch = line.match(/^(?:(\d+[\.\)-]?\s+))?(.*?)\s+(\d+(?:[.,]\d+)?)\s+([\d\s.,]+)$/);
+      if (twoNumsMatch) {
+        const desc = (twoNumsMatch[2] || '').trim();
+        const qty = parseNumber(twoNumsMatch[3]);
+        const price = parseNumber(twoNumsMatch[4]);
 
-            extractedItems.push({
-              rawDescription: desc,
-              description: desc,
-              quantity: Math.max(1, Math.round(qty)),
-              unitPrice: price,
-              total: lineTotal,
-              confidence: 80
-            });
-          }
+        if (desc && desc.length >= 2 && !/total|sous-total|tva|montant|remise|tableau/i.test(desc) && qty > 0 && price > 0) {
+          extractedItems.push({
+            rawDescription: desc,
+            description: desc,
+            quantity: Math.max(1, Math.round(qty)),
+            unitPrice: price,
+            total: qty * price,
+            confidence: 85
+          });
+          continue;
         }
       }
     }
