@@ -215,7 +215,24 @@ function startLiveClock() {
 // ==========================================
 // WORKSPACE 1: INVENTORY & STOCK MANAGER
 // ==========================================
-async function renderInventoryWorkspace() {
+let invCurrentPage = 0;
+const INV_PAGE_SIZE = 50;
+let invTotalCount = 0;
+
+async function changeInventoryPage(delta) {
+  const maxPage = Math.max(0, Math.ceil(invTotalCount / INV_PAGE_SIZE) - 1);
+  const newPage = invCurrentPage + delta;
+  if (newPage >= 0 && newPage <= maxPage) {
+    invCurrentPage = newPage;
+    await renderInventoryWorkspace(false);
+  }
+}
+window.changeInventoryPage = changeInventoryPage;
+
+async function renderInventoryWorkspace(resetPage = true) {
+  if (typeof resetPage !== 'boolean') resetPage = true;
+  if (resetPage) invCurrentPage = 0;
+
   if (window.FlexiDB && window.FlexiDB.init) {
     try {
       await window.FlexiDB.init();
@@ -224,69 +241,57 @@ async function renderInventoryWorkspace() {
     }
   }
   if (!window.FlexiDB || !window.FlexiDB.db) return;
-  const db = window.FlexiDB.db;
 
   try {
-    const products = await db.products.toArray();
+    // 1. Lightweight Inventory Statistics (Cursor-streamed without holding 42k objects in memory)
+    if (window.FlexiDB.getInventoryStats) {
+      const stats = await window.FlexiDB.getInventoryStats();
+      const elTotProd = document.getElementById('inv-stat-total-products');
+      const elTotUnits = document.getElementById('inv-stat-total-units');
+      const elRetailVal = document.getElementById('inv-stat-retail-value');
+      const elLowCount = document.getElementById('inv-stat-low-count');
+      const navLowBadge = document.getElementById('nav-low-stock-badge');
 
-    // Compute Inventory Statistics
-    const totalProducts = products.length;
-    let totalUnits = 0;
-    let totalRetailVal = 0;
-    let lowCount = 0;
+      if (elTotProd) elTotProd.innerText = `${stats.totalProducts.toLocaleString()} items`;
+      if (elTotUnits) elTotUnits.innerText = `${stats.totalUnits.toLocaleString()} units`;
+      if (elRetailVal) elRetailVal.innerText = `${stats.totalRetailVal.toFixed(2)} DA`;
+      if (elLowCount) elLowCount.innerText = `${stats.lowCount} alerts`;
 
-    for (const p of products) {
-      const stock = Number(p.currentStock) || 0;
-      const price = Number(p.sellingPrice || p.price) || 0;
-      const threshold = Number(p.lowStockThreshold != null ? p.lowStockThreshold : 10);
-      totalUnits += stock;
-      totalRetailVal += stock * price;
-      if (stock <= threshold) lowCount++;
-    }
-
-    // Update Stats in Top Cards
-    const elTotProd = document.getElementById('inv-stat-total-products');
-    const elTotUnits = document.getElementById('inv-stat-total-units');
-    const elRetailVal = document.getElementById('inv-stat-retail-value');
-    const elLowCount = document.getElementById('inv-stat-low-count');
-    const navLowBadge = document.getElementById('nav-low-stock-badge');
-
-    if (elTotProd) elTotProd.innerText = `${totalProducts} items`;
-    if (elTotUnits) elTotUnits.innerText = `${totalUnits.toLocaleString()} units`;
-    if (elRetailVal) elRetailVal.innerText = `${totalRetailVal.toFixed(2)} DA`;
-    if (elLowCount) elLowCount.innerText = `${lowCount} alerts`;
-
-    if (navLowBadge) {
-      if (lowCount > 0) {
-        navLowBadge.classList.remove('hidden');
-        navLowBadge.innerText = lowCount;
-      } else {
-        navLowBadge.classList.add('hidden');
+      if (navLowBadge) {
+        if (stats.lowCount > 0) {
+          navLowBadge.classList.remove('hidden');
+          navLowBadge.innerText = stats.lowCount;
+        } else {
+          navLowBadge.classList.add('hidden');
+        }
       }
     }
 
-    // Filter Products for Table
+    // 2. Fetch Paged Slice for Table
     const searchVal = (document.getElementById('inventory-search-input')?.value || '').toLowerCase().trim();
     const catVal = document.getElementById('inventory-category-filter')?.value || 'all';
     const stockFilter = document.getElementById('inventory-stock-filter')?.value || 'all';
 
-    const filtered = products.filter(p => {
-      const matchesCat = catVal === 'all' || p.category === catVal;
-      const matchesSearch = !searchVal ||
-        p.name.toLowerCase().includes(searchVal) ||
-        p.category.toLowerCase().includes(searchVal) ||
-        (p.barcode && p.barcode.toLowerCase().includes(searchVal));
+    let filtered = [];
+    let totalMatched = 0;
 
-      const stock = Number(p.currentStock) || 0;
-      const threshold = Number(p.lowStockThreshold != null ? p.lowStockThreshold : 10);
+    if (window.FlexiDB.getProductsPaged) {
+      const res = await window.FlexiDB.getProductsPaged({
+        category: catVal,
+        search: searchVal,
+        stockFilter: stockFilter,
+        page: invCurrentPage,
+        pageSize: INV_PAGE_SIZE
+      });
+      filtered = res.products || [];
+      totalMatched = res.total || 0;
+    } else {
+      const all = await window.FlexiDB.db.products.toArray();
+      filtered = all.slice(invCurrentPage * INV_PAGE_SIZE, (invCurrentPage + 1) * INV_PAGE_SIZE);
+      totalMatched = all.length;
+    }
 
-      let matchesStock = true;
-      if (stockFilter === 'in_stock') matchesStock = stock > threshold;
-      else if (stockFilter === 'low_stock') matchesStock = stock > 0 && stock <= threshold;
-      else if (stockFilter === 'out_of_stock') matchesStock = stock <= 0;
-
-      return matchesCat && matchesSearch && matchesStock;
-    });
+    invTotalCount = totalMatched;
 
     const tbody = document.getElementById('inventory-table-body');
     if (!tbody) return;
@@ -295,72 +300,86 @@ async function renderInventoryWorkspace() {
       tbody.innerHTML = `
         <tr>
           <td colspan="9" class="p-8 text-center text-slate-400 text-xs">
-            No products match your current filters.
+            Aucun produit ne correspond à vos filtres de recherche.
           </td>
         </tr>`;
-      return;
+    } else {
+      tbody.innerHTML = filtered.map(p => {
+        const stock = Number(p.currentStock) || 0;
+        const threshold = Number(p.lowStockThreshold != null ? p.lowStockThreshold : 10);
+        const isOutOfStock = stock <= 0;
+        const isLowStock = stock <= threshold && !isOutOfStock;
+        const cost = Number(p.costPrice || 0);
+        const price = Number(p.sellingPrice || p.price || 0);
+        const margin = price > 0 ? (((price - cost) / price) * 100).toFixed(0) : '0';
+
+        const statusBadge = isOutOfStock
+          ? '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 border border-rose-300 dark:border-rose-800">OUT OF STOCK</span>'
+          : isLowStock
+          ? '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-300 dark:border-amber-800">LOW STOCK</span>'
+          : '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">IN STOCK</span>';
+
+        return `
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
+            <td class="text-center text-xl select-none">
+              ${p.icon || '📦'}
+            </td>
+            <td>
+              <div class="flex flex-col">
+                <span class="font-bold text-slate-800 dark:text-slate-100 text-xs">${escapeHtml(p.name)}</span>
+                ${p.image ? `<span class="text-[10px] text-indigo-500 truncate max-w-[140px]">Photo Attached</span>` : ''}
+              </div>
+            </td>
+            <td>
+              <span class="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px] font-semibold">${escapeHtml(p.category || 'General')}</span>
+            </td>
+            <td>
+              <span class="font-mono text-[11px] text-slate-500 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">${escapeHtml(p.barcode || 'NO BARCODE')}</span>
+            </td>
+            <td class="text-right font-mono text-slate-500">
+              ${cost.toFixed(2)} DA
+            </td>
+            <td class="text-right font-mono font-bold text-slate-800 dark:text-slate-100">
+              ${price.toFixed(2)} DA
+              <span class="block text-[10px] text-emerald-600 font-normal">(${margin}% margin)</span>
+            </td>
+            <td class="text-center">
+              <div class="inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 p-1">
+                <button onclick="quickAdjustStock('${escapeHtml(String(p.id))}', -1)" class="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 font-bold text-xs flex items-center justify-center">-1</button>
+                <span class="px-2 font-mono font-black text-xs min-w-[28px] text-center ${isOutOfStock ? 'text-rose-600' : isLowStock ? 'text-amber-600' : 'text-slate-800 dark:text-slate-100'}">${stock}</span>
+                <button onclick="quickAdjustStock('${escapeHtml(String(p.id))}', 1)" class="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 font-bold text-xs flex items-center justify-center">+1</button>
+                <button onclick="quickAdjustStock('${escapeHtml(String(p.id))}', 10)" class="px-1.5 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 font-bold text-[10px] flex items-center justify-center">+10</button>
+              </div>
+            </td>
+            <td class="text-center">
+              ${statusBadge}
+            </td>
+            <td class="text-right">
+              <div class="flex items-center justify-end gap-1.5">
+                <button onclick="editProduct('${escapeHtml(String(p.id))}')" class="p-1.5 px-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center gap-1" title="Edit Product">
+                  <span>✏️</span> <span>Edit</span>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
 
-    tbody.innerHTML = filtered.map(p => {
-      const stock = Number(p.currentStock) || 0;
-      const threshold = Number(p.lowStockThreshold != null ? p.lowStockThreshold : 10);
-      const isOutOfStock = stock <= 0;
-      const isLowStock = stock <= threshold && !isOutOfStock;
-      const cost = Number(p.costPrice || 0);
-      const price = Number(p.sellingPrice || p.price || 0);
-      const margin = price > 0 ? (((price - cost) / price) * 100).toFixed(0) : '0';
+    // 3. Update Pagination Controls
+    const totalPages = Math.max(1, Math.ceil(totalMatched / INV_PAGE_SIZE));
+    const startIdx = totalMatched === 0 ? 0 : (invCurrentPage * INV_PAGE_SIZE + 1);
+    const endIdx = Math.min(totalMatched, (invCurrentPage + 1) * INV_PAGE_SIZE);
 
-      const statusBadge = isOutOfStock
-        ? '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 border border-rose-300 dark:border-rose-800">OUT OF STOCK</span>'
-        : isLowStock
-        ? '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-300 dark:border-amber-800">LOW STOCK</span>'
-        : '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">IN STOCK</span>';
+    const elInfo = document.getElementById('inventory-pagination-info');
+    const elIndicator = document.getElementById('inventory-page-indicator');
+    const btnPrev = document.getElementById('inventory-prev-page');
+    const btnNext = document.getElementById('inventory-next-page');
 
-      return `
-        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition">
-          <td class="text-center text-xl select-none">
-            ${p.icon || '📦'}
-          </td>
-          <td>
-            <div class="flex flex-col">
-              <span class="font-bold text-slate-800 dark:text-slate-100 text-xs">${escapeHtml(p.name)}</span>
-              ${p.image ? `<span class="text-[10px] text-indigo-500 truncate max-w-[140px]">Photo Attached</span>` : ''}
-            </div>
-          </td>
-          <td>
-            <span class="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px] font-semibold">${escapeHtml(p.category)}</span>
-          </td>
-          <td>
-            <span class="font-mono text-[11px] text-slate-500 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">${escapeHtml(p.barcode || 'NO BARCODE')}</span>
-          </td>
-          <td class="text-right font-mono text-slate-500">
-            ${cost.toFixed(2)} DA
-          </td>
-          <td class="text-right font-mono font-bold text-slate-800 dark:text-slate-100">
-            ${price.toFixed(2)} DA
-            <span class="block text-[10px] text-emerald-600 font-normal">(${margin}% margin)</span>
-          </td>
-          <td class="text-center">
-            <div class="inline-flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 p-1">
-              <button onclick="quickAdjustStock('${escapeHtml(String(p.id))}', -1)" class="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 font-bold text-xs flex items-center justify-center">-1</button>
-              <span class="px-2 font-mono font-black text-xs min-w-[28px] text-center ${isOutOfStock ? 'text-rose-600' : isLowStock ? 'text-amber-600' : 'text-slate-800 dark:text-slate-100'}">${stock}</span>
-              <button onclick="quickAdjustStock('${escapeHtml(String(p.id))}', 1)" class="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 font-bold text-xs flex items-center justify-center">+1</button>
-              <button onclick="quickAdjustStock('${escapeHtml(String(p.id))}', 10)" class="px-1.5 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600 font-bold text-[10px] flex items-center justify-center">+10</button>
-            </div>
-          </td>
-          <td class="text-center">
-            ${statusBadge}
-          </td>
-          <td class="text-right">
-            <div class="flex items-center justify-end gap-1.5">
-              <button onclick="editProduct('${escapeHtml(String(p.id))}')" class="p-1.5 px-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center gap-1" title="Edit Product">
-                <span>✏️</span> <span>Edit</span>
-              </button>
-            </div>
-          </td>
-        </tr>
-      `;
-    }).join('');
+    if (elInfo) elInfo.innerText = `Affichage de ${startIdx.toLocaleString()} à ${endIdx.toLocaleString()} sur ${totalMatched.toLocaleString()} produit(s)`;
+    if (elIndicator) elIndicator.innerText = `Page ${invCurrentPage + 1} / ${totalPages}`;
+    if (btnPrev) btnPrev.disabled = invCurrentPage <= 0;
+    if (btnNext) btnNext.disabled = invCurrentPage >= totalPages - 1;
 
   } catch (err) {
     console.error('Inventory rendering error:', err);
@@ -373,18 +392,20 @@ async function quickAdjustStock(productId, delta) {
   if (!window.FlexiDB || !window.FlexiDB.db) return;
   const db = window.FlexiDB.db;
   try {
-    const product = await db.products.get(productId);
+    const idNum = Number(productId);
+    const product = (!isNaN(idNum) ? await db.products.get(idNum) : null) || await db.products.get(productId) || await db.products.get(String(productId));
     if (!product) return;
+    const actualId = product.id;
     const prevStock = Number(product.currentStock) || 0;
     const newStock = Math.max(0, prevStock + delta);
 
-    await db.products.update(productId, {
+    await db.products.update(actualId, {
       currentStock: newStock,
       updatedAt: new Date().toISOString()
     });
 
     await db.stockLogs.add({
-      productId: productId,
+      productId: actualId,
       timestamp: new Date().toISOString(),
       type: 'ADJUSTMENT',
       quantityChange: delta,
@@ -394,8 +415,8 @@ async function quickAdjustStock(productId, delta) {
       note: 'Quick inventory table adjustment'
     });
 
-    showToast(`Stock updated for ${product.name}: ${newStock} units`);
-    renderInventoryWorkspace();
+    showToast(`Stock mis à jour pour ${product.name}: ${newStock} unités`);
+    await renderInventoryWorkspace(false);
     if (window.POS?.loadProducts) window.POS.loadProducts();
   } catch (e) {
     showToast('Error updating stock: ' + e.message, 'error');

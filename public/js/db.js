@@ -649,6 +649,124 @@
     }
   }
 
+  async function getProductsPaged({
+    category = 'all',
+    search = '',
+    stockFilter = 'all',
+    page = 0,
+    pageSize = 32
+  } = {}) {
+    if (!db.isOpen()) await db.open();
+
+    const cleanSearch = (search || '').trim().toLowerCase();
+    const isNumericBarcode = /^\d{3,}$/.test(cleanSearch);
+
+    // Fast path: Direct barcode prefix search
+    if (isNumericBarcode && (!category || category === 'all') && stockFilter === 'all') {
+      const barcodeMatches = await db.products
+        .where('barcode')
+        .startsWith(cleanSearch)
+        .offset(page * pageSize)
+        .limit(pageSize)
+        .toArray();
+      
+      return {
+        products: barcodeMatches,
+        total: barcodeMatches.length,
+        page,
+        pageSize,
+        hasMore: barcodeMatches.length === pageSize
+      };
+    }
+
+    // Category filtering
+    let collection;
+    if (category && category !== 'all') {
+      collection = db.products.where('category').equalsIgnoreCase(category);
+    } else {
+      collection = db.products.toCollection();
+    }
+
+    // Streaming filter with pagination
+    if (cleanSearch || stockFilter !== 'all') {
+      const skip = page * pageSize;
+      const results = [];
+      let matchedCount = 0;
+
+      await collection.each(p => {
+        // Stock filter
+        if (stockFilter !== 'all') {
+          const stock = Number(p.currentStock) || 0;
+          const threshold = Number(p.lowStockThreshold != null ? p.lowStockThreshold : 10);
+          if (stockFilter === 'in_stock' && stock <= threshold) return;
+          if (stockFilter === 'low_stock' && (stock <= 0 || stock > threshold)) return;
+          if (stockFilter === 'out_of_stock' && stock > 0) return;
+        }
+
+        // Search text filter
+        if (cleanSearch) {
+          const nameMatch = p.name && p.name.toLowerCase().includes(cleanSearch);
+          const catMatch = p.category && p.category.toLowerCase().includes(cleanSearch);
+          const barcodeMatch = p.barcode && String(p.barcode).toLowerCase().includes(cleanSearch);
+          if (!nameMatch && !catMatch && !barcodeMatch) return;
+        }
+
+        if (matchedCount >= skip && results.length < pageSize) {
+          results.push(p);
+        }
+        matchedCount++;
+      });
+
+      return {
+        products: results,
+        total: matchedCount,
+        page,
+        pageSize,
+        hasMore: matchedCount > skip + results.length
+      };
+    }
+
+    // Fast indexed pagination
+    const total = await collection.count();
+    const products = await collection
+      .offset(page * pageSize)
+      .limit(pageSize)
+      .toArray();
+
+    return {
+      products,
+      total,
+      page,
+      pageSize,
+      hasMore: total > (page + 1) * pageSize
+    };
+  }
+
+  async function getInventoryStats() {
+    if (!db.isOpen()) await db.open();
+    let totalProducts = 0;
+    let totalUnits = 0;
+    let totalRetailVal = 0;
+    let lowCount = 0;
+
+    await db.products.each(p => {
+      totalProducts++;
+      const stock = Number(p.currentStock) || 0;
+      const price = Number(p.sellingPrice || p.price) || 0;
+      const threshold = Number(p.lowStockThreshold != null ? p.lowStockThreshold : 10);
+      totalUnits += stock;
+      totalRetailVal += stock * price;
+      if (stock <= threshold) lowCount++;
+    });
+
+    return {
+      totalProducts,
+      totalUnits,
+      totalRetailVal,
+      lowCount
+    };
+  }
+
   // Exposed FlexiDB global interface
   window.FlexiDB = {
     db: db,
@@ -663,6 +781,8 @@
     getAllCorrections: getAllCorrections,
     getLearningStats: getLearningStats,
     importAlgeriaSupermarketCatalog: importAlgeriaSupermarketCatalog,
+    getProductsPaged: getProductsPaged,
+    getInventoryStats: getInventoryStats,
     DEFAULT_SEED_PRODUCTS: DEFAULT_SEED_PRODUCTS,
     DEFAULT_SEED_CATEGORIES: DEFAULT_SEED_CATEGORIES,
     DEFAULT_SEED_CUSTOMERS: DEFAULT_SEED_CUSTOMERS,

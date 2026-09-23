@@ -84,121 +84,38 @@
     }
   }
 
-  // --- Load Products with multi-tier fallbacks ---
+  // --- Lazy Product Fetching & Pagination Engine ---
+  let posCurrentPage = 0;
+  const POS_PAGE_SIZE = 36;
+  let posHasMore = true;
+  let posIsLoading = false;
+  let posSentinelObserver = null;
+
   async function loadPosProducts() {
-    try {
-      if (window.FlexiDB && window.FlexiDB.init) {
-        try {
-          await window.FlexiDB.init();
-        } catch (_) {}
-      }
-
-      if (window.FlexiDB && window.FlexiDB.db) {
-        try {
-          if (!window.FlexiDB.db.isOpen()) {
-            await window.FlexiDB.db.open();
-          }
-          posProducts = await window.FlexiDB.db.products.toArray();
-        } catch (dbErr) {
-          console.warn('Dexie toArray failed, falling back:', dbErr);
-        }
-      }
-
-      // If database returned no products, fallback to server /api/pos/products
-      if (!posProducts || posProducts.length === 0) {
-        console.warn('IndexedDB returned 0 products, fetching from /api/pos/products...');
-        try {
-          const posEndpoint = window.apiUrl ? window.apiUrl('/api/pos/products') : '/api/pos/products';
-          const res = await fetch(posEndpoint);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.products && data.products.length > 0) {
-              posProducts = data.products.map((p, idx) => ({
-                id: p.id || (idx + 1),
-                barcode: p.barcode,
-                name: p.name,
-                category: p.category || 'General',
-                sellingPrice: p.sellingPrice || p.price || 0,
-                costPrice: p.costPrice || 0,
-                currentStock: p.currentStock != null ? p.currentStock : (p.stock != null ? p.stock : 99),
-                lowStockThreshold: p.lowStockThreshold || 10,
-                icon: p.icon || '📦',
-                image: p.image || ''
-              }));
-
-              // Sync to IndexedDB if open
-              if (window.FlexiDB?.db?.isOpen()) {
-                window.FlexiDB.db.products.bulkAdd(posProducts).catch(() => {});
-              }
-            }
-          }
-        } catch (netErr) {
-          console.warn('Server fallback fetch failed:', netErr.message);
-        }
-      }
-
-      // If still empty, use FALLBACK_SEED_PRODUCTS
-      if (!posProducts || posProducts.length === 0) {
-        if (window.FlexiDB?.DEFAULT_SEED_PRODUCTS) {
-          posProducts = window.FlexiDB.DEFAULT_SEED_PRODUCTS.map((p, idx) => ({
-            ...p,
-            id: idx + 1
-          }));
-        } else {
-          posProducts = FALLBACK_SEED_PRODUCTS.slice();
-        }
-      }
-
-      // Build O(1) in-memory lookup maps
-      productMap.clear();
-      barcodeMap.clear();
-      for (let i = 0; i < posProducts.length; i++) {
-        const p = posProducts[i];
-        productMap.set(p.id, p);
-        productMap.set(String(p.id), p);
-        if (typeof p.id === 'string' && !isNaN(p.id)) {
-          productMap.set(Number(p.id), p);
-        }
-        if (p.barcode) {
-          barcodeMap.set(String(p.barcode).toLowerCase(), p);
-        }
-      }
-      renderPosProducts();
-      updateLowStockBadge();
-      updateExpiryBadge();
-      updateSyncBadge();
-    } catch (e) {
-      console.error('Error in loadPosProducts:', e);
-      renderPosProducts();
-    }
+    await renderPosProducts(true);
+    updateLowStockBadge();
+    updateExpiryBadge();
+    updateSyncBadge();
   }
 
-  function updateLowStockBadge() {
+  async function updateLowStockBadge() {
     const badge = document.getElementById('low-stock-alert-badge');
     const navBadge = document.getElementById('nav-low-stock-badge');
-    const lowCount = posProducts.filter(p => {
-      const threshold = Number(p.lowStockThreshold != null ? p.lowStockThreshold : 10);
-      const stock = Number(p.currentStock != null ? p.currentStock : (p.stock != null ? p.stock : 0));
-      return stock <= threshold;
-    }).length;
-
-    if (badge) {
-      if (lowCount > 0) {
-        badge.classList.remove('hidden');
-        badge.innerHTML = `<span>⚠️</span> <span>${lowCount} Low Stock</span>`;
-      } else {
-        badge.classList.add('hidden');
+    if (!window.FlexiDB || !window.FlexiDB.db) return;
+    try {
+      if (window.FlexiDB.getInventoryStats) {
+        const stats = await window.FlexiDB.getInventoryStats();
+        const lowCount = stats.lowCount || 0;
+        if (badge) {
+          badge.classList.toggle('hidden', lowCount === 0);
+          badge.innerText = `⚠️ ${lowCount} Low Stock`;
+        }
+        if (navBadge) {
+          navBadge.classList.toggle('hidden', lowCount === 0);
+          navBadge.innerText = lowCount;
+        }
       }
-    }
-
-    if (navBadge) {
-      if (lowCount > 0) {
-        navBadge.classList.remove('hidden');
-        navBadge.innerText = lowCount;
-      } else {
-        navBadge.classList.add('hidden');
-      }
-    }
+    } catch (e) {}
   }
 
   async function updateExpiryBadge() {
@@ -270,54 +187,19 @@
   }
   window.updateSyncBadge = updateSyncBadge;
 
-  function renderPosProducts() {
-    const grid = document.getElementById('pos-product-grid');
-    if (!grid) return;
+  function buildProductCardHtml(p) {
+    const stockVal = Number(p.currentStock != null ? p.currentStock : (p.stock != null ? p.stock : 0));
+    const threshVal = Number(p.lowStockThreshold != null ? p.lowStockThreshold : 10);
+    const isLowStock = stockVal <= threshVal;
+    const isOutOfStock = stockVal <= 0;
+    const price = Number(p.sellingPrice || p.price || 0);
+    const safeId = escapeHtml(String(p.id));
+    const hasPack = p.unitsPerPack && Number(p.unitsPerPack) > 1;
+    const packMultiplier = hasPack ? Number(p.unitsPerPack) : 1;
+    const packPrice = hasPack ? Number(p.packPrice || (price * packMultiplier)) : 0;
+    const packLabel = escapeHtml(p.packUnitLabel || 'Pack');
 
-    const searchTerm = (document.getElementById('pos-search-input')?.value || '').toLowerCase().trim();
-
-    const filtered = posProducts.filter(p => {
-      const matchesCat = posActiveCategory === 'all' || p.category === posActiveCategory;
-      const matchesSearch = !searchTerm || 
-        (p.name && p.name.toLowerCase().includes(searchTerm)) || 
-        (p.category && p.category.toLowerCase().includes(searchTerm)) ||
-        (p.barcode && String(p.barcode).toLowerCase().includes(searchTerm));
-      return matchesCat && matchesSearch;
-    });
-
-    if (filtered.length === 0) {
-      if (posProducts.length === 0) {
-        grid.innerHTML = `
-          <div class="text-slate-400 text-xs p-8 text-center col-span-full flex flex-col items-center gap-3">
-            <span>No catalog products loaded.</span>
-            <div class="flex items-center gap-2">
-              <button onclick="window.POS && window.POS.loadProducts()" class="px-3.5 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 text-xs font-bold shadow-sm hover:bg-indigo-100 transition">🔄 Reload Catalog</button>
-              <button onclick="openProductModal()" class="btn-gradient text-white px-3.5 py-1.5 rounded-xl font-bold text-xs shadow-sm">➕ Add New Item</button>
-            </div>
-          </div>`;
-      } else {
-        grid.innerHTML = `
-          <div class="text-slate-400 text-xs p-8 text-center col-span-full flex flex-col items-center gap-3">
-            <span>No products found matching your search.</span>
-            <button onclick="openProductModal()" class="btn-gradient text-white px-3 py-1.5 rounded-xl font-bold">➕ Add New Item</button>
-          </div>`;
-      }
-      return;
-    }
-
-    grid.innerHTML = filtered.map(p => {
-      const stockVal = Number(p.currentStock != null ? p.currentStock : (p.stock != null ? p.stock : 0));
-      const threshVal = Number(p.lowStockThreshold != null ? p.lowStockThreshold : 10);
-      const isLowStock = stockVal <= threshVal;
-      const isOutOfStock = stockVal <= 0;
-      const price = Number(p.sellingPrice || p.price || 0);
-      const safeId = escapeHtml(String(p.id));
-      const hasPack = p.unitsPerPack && Number(p.unitsPerPack) > 1;
-      const packMultiplier = hasPack ? Number(p.unitsPerPack) : 1;
-      const packPrice = hasPack ? Number(p.packPrice || (price * packMultiplier)) : 0;
-      const packLabel = escapeHtml(p.packUnitLabel || 'Pack');
-
-      return `
+    return `
       <div id="product-card-${safeId}" class="glass-panel overflow-hidden rounded-2xl border ${isOutOfStock ? 'border-rose-300 dark:border-rose-900 opacity-75' : isLowStock ? 'border-amber-300 dark:border-amber-800' : 'border-slate-200/80 dark:border-slate-800'} shadow-sm hover:border-indigo-500 hover:shadow-lg transition-all flex flex-col justify-between group relative bg-white/70 dark:bg-slate-900/70">
         
         <!-- Product Thumbnail Image Header -->
@@ -373,7 +255,117 @@
         </div>
 
       </div>`;
-    }).join('');
+  }
+
+  async function renderPosProducts(reset = false) {
+    const grid = document.getElementById('pos-product-grid');
+    if (!grid) return;
+
+    if (reset) {
+      posCurrentPage = 0;
+      posHasMore = true;
+      posProducts = [];
+    }
+
+    if (posIsLoading || (!posHasMore && !reset)) return;
+    posIsLoading = true;
+
+    const sentinel = document.getElementById('pos-scroll-sentinel');
+    if (sentinel && !reset) sentinel.classList.remove('hidden');
+
+    const searchTerm = (document.getElementById('pos-search-input')?.value || '').toLowerCase().trim();
+
+    try {
+      let pageProducts = [];
+      let hasMoreItems = false;
+
+      if (window.FlexiDB && window.FlexiDB.getProductsPaged) {
+        const res = await window.FlexiDB.getProductsPaged({
+          category: posActiveCategory,
+          search: searchTerm,
+          page: posCurrentPage,
+          pageSize: POS_PAGE_SIZE
+        });
+        pageProducts = res.products || [];
+        hasMoreItems = res.hasMore;
+      } else if (window.FlexiDB && window.FlexiDB.db) {
+        pageProducts = await window.FlexiDB.db.products.offset(posCurrentPage * POS_PAGE_SIZE).limit(POS_PAGE_SIZE).toArray();
+        hasMoreItems = pageProducts.length === POS_PAGE_SIZE;
+      } else {
+        pageProducts = FALLBACK_SEED_PRODUCTS;
+      }
+
+      // Populate in-memory quick-lookup maps
+      pageProducts.forEach(p => {
+        posProducts.push(p);
+        productMap.set(p.id, p);
+        productMap.set(String(p.id), p);
+        if (p.barcode) {
+          barcodeMap.set(String(p.barcode).trim().toLowerCase(), p);
+        }
+      });
+
+      if (reset) {
+        if (pageProducts.length === 0) {
+          if (searchTerm || posActiveCategory !== 'all') {
+            grid.innerHTML = `
+              <div class="text-slate-400 text-xs p-8 text-center col-span-full flex flex-col items-center gap-3">
+                <span>Aucun produit trouvé pour ces critères.</span>
+                <button onclick="openProductModal()" class="btn-gradient text-white px-3 py-1.5 rounded-xl font-bold">➕ Ajouter un produit</button>
+              </div>`;
+          } else {
+            grid.innerHTML = `
+              <div class="text-slate-400 text-xs p-8 text-center col-span-full flex flex-col items-center gap-3">
+                <span>Catalogue vide ou en cours d'initialisation.</span>
+                <div class="flex items-center gap-2">
+                  <button onclick="window.POS && window.POS.loadProducts()" class="px-3.5 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 text-xs font-bold shadow-sm hover:bg-indigo-100 transition">🔄 Recharger</button>
+                  <button onclick="openProductModal()" class="btn-gradient text-white px-3.5 py-1.5 rounded-xl font-bold text-xs shadow-sm">➕ Ajouter un produit</button>
+                </div>
+              </div>`;
+          }
+        } else {
+          grid.innerHTML = pageProducts.map(buildProductCardHtml).join('');
+        }
+      } else {
+        if (pageProducts.length > 0) {
+          grid.insertAdjacentHTML('beforeend', pageProducts.map(buildProductCardHtml).join(''));
+        }
+      }
+
+      posHasMore = hasMoreItems;
+      if (posHasMore) {
+        posCurrentPage++;
+      }
+
+      setupPosInfiniteScrollObserver();
+    } catch (err) {
+      console.error('Error in renderPosProducts:', err);
+    } finally {
+      posIsLoading = false;
+      if (sentinel) sentinel.classList.add('hidden');
+    }
+  }
+
+  function setupPosInfiniteScrollObserver() {
+    const sentinel = document.getElementById('pos-scroll-sentinel');
+    if (!sentinel) return;
+
+    if (posSentinelObserver) {
+      posSentinelObserver.disconnect();
+    }
+
+    if (!posHasMore) {
+      sentinel.classList.add('hidden');
+      return;
+    }
+
+    posSentinelObserver = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && posHasMore && !posIsLoading) {
+        renderPosProducts(false);
+      }
+    }, { rootMargin: '300px' });
+
+    posSentinelObserver.observe(sentinel);
   }
 
   // Web Audio Scanner Beep
@@ -549,17 +541,37 @@
     document.getElementById('camera-scanner-modal')?.classList.add('hidden');
   }
 
-  function handleScannedBarcode(barcode) {
+  async function handleScannedBarcode(barcode) {
     playScannerBeep();
 
+    const cleanBarcode = String(barcode).trim();
     const testOutput = document.getElementById('scanner-test-output');
     if (testOutput) {
-      testOutput.innerHTML = `✅ Scanned: <span class="text-emerald-600 font-extrabold text-sm">${escapeHtml(barcode)}</span> (${barcode.length} chars)`;
+      testOutput.innerHTML = `✅ Scanned: <span class="text-emerald-600 font-extrabold text-sm">${escapeHtml(cleanBarcode)}</span> (${cleanBarcode.length} chars)`;
     }
 
-    // Fast O(1) in-memory lookup
-    const normalized = barcode.toLowerCase();
-    const product = barcodeMap.get(normalized) || productMap.get(Number(barcode)) || productMap.get(barcode);
+    // 1. Fast O(1) in-memory lookup
+    const normalized = cleanBarcode.toLowerCase();
+    let product = barcodeMap.get(normalized) || productMap.get(Number(cleanBarcode)) || productMap.get(cleanBarcode);
+
+    // 2. Fast IndexedDB fallback if item not loaded in current UI slice
+    if (!product && window.FlexiDB && window.FlexiDB.db) {
+      try {
+        const db = window.FlexiDB.db;
+        product = await db.products.where('barcode').equals(cleanBarcode).first();
+        if (!product) {
+          product = await db.products.where('barcode').equalsIgnoreCase(cleanBarcode).first();
+        }
+        if (product) {
+          // Cache in memory for subsequent hits
+          productMap.set(product.id, product);
+          productMap.set(String(product.id), product);
+          barcodeMap.set(normalized, product);
+        }
+      } catch (dbErr) {
+        console.warn('Barcode DB lookup error:', dbErr);
+      }
+    }
 
     if (product) {
       addToPosCart(product.id);
@@ -571,9 +583,9 @@
         setTimeout(() => card.classList.remove('ring-4', 'ring-indigo-500', 'scale-105'), 400);
       }
     } else {
-      showToast(`Unrecognized Barcode: ${barcode}`, 'error');
-      if (confirm(`Barcode "${barcode}" not found in inventory. Would you like to create a new product for this barcode?`)) {
-        openProductModal(null, barcode);
+      showToast(`Unrecognized Barcode: ${cleanBarcode}`, 'error');
+      if (confirm(`Barcode "${cleanBarcode}" not found in inventory. Would you like to create a new product for this barcode?`)) {
+        openProductModal(null, cleanBarcode);
       }
     }
   }
@@ -656,8 +668,13 @@
     modal.classList.remove('hidden');
   };
 
-  window.editProduct = (productId) => {
-    const product = posProducts.find(p => p.id === productId || String(p.id) === String(productId));
+  window.editProduct = async (productId) => {
+    let product = productMap.get(productId) || productMap.get(Number(productId)) || productMap.get(String(productId)) || posProducts.find(p => p.id === productId || String(p.id) === String(productId));
+    if (!product && window.FlexiDB && window.FlexiDB.db) {
+      try {
+        product = await window.FlexiDB.db.products.get(Number(productId)) || await window.FlexiDB.db.products.get(String(productId)) || await window.FlexiDB.db.products.get(productId);
+      } catch (e) {}
+    }
     if (product) openProductModal(product);
   };
 
@@ -833,8 +850,17 @@
   };
 
   // --- Cart Operations ---
-  window.addToPosCart = (productId, requestedUnit = null) => {
-    const product = productMap.get(productId) || productMap.get(Number(productId)) || productMap.get(String(productId)) || posProducts.find(p => String(p.id) === String(productId));
+  window.addToPosCart = async (productId, requestedUnit = null) => {
+    let product = productMap.get(productId) || productMap.get(Number(productId)) || productMap.get(String(productId)) || posProducts.find(p => String(p.id) === String(productId));
+    if (!product && window.FlexiDB && window.FlexiDB.db) {
+      try {
+        product = await window.FlexiDB.db.products.get(Number(productId)) || await window.FlexiDB.db.products.get(String(productId)) || await window.FlexiDB.db.products.get(productId);
+        if (product) {
+          productMap.set(product.id, product);
+          productMap.set(String(product.id), product);
+        }
+      } catch (e) {}
+    }
     if (!product) return;
 
     const currentStock = Number(product.currentStock != null ? product.currentStock : (product.stock != null ? product.stock : 0));
@@ -2041,7 +2067,7 @@
     let searchDebounceTimer = null;
     document.getElementById('pos-search-input')?.addEventListener('input', () => {
       clearTimeout(searchDebounceTimer);
-      searchDebounceTimer = setTimeout(renderPosProducts, 120);
+      searchDebounceTimer = setTimeout(() => renderPosProducts(true), 120);
     });
 
     // Category pills
@@ -2057,7 +2083,7 @@
       btn.classList.remove('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-300');
 
       posActiveCategory = btn.dataset.category || 'all';
-      renderPosProducts();
+      renderPosProducts(true);
     });
 
     // Discount percentage listener
