@@ -132,19 +132,18 @@
         const numericProdId = Number(line.productId);
         const targetProdId = isNaN(numericProdId) ? line.productId : numericProdId;
 
-        // Multi-register race-condition safe relative stock decrement
+        // Multi-register race-condition safe relative stock decrement with non-negative guard
         await db.products.where('id').equals(targetProdId).modify(p => {
-          p.currentStock = (Number(p.currentStock) || 0) - line.baseQuantity;
+          const current = Number(p.currentStock) || 0;
+          p.currentStock = Math.max(0, current - line.baseQuantity);
           p.updatedAt = timestamp;
         });
 
         // FIFO Depletion of perishable batches (if batches store exists)
         if (db.batches) {
           let qtyToDeplete = line.baseQuantity;
-          const allBatches = await db.batches.toArray();
-          const productBatches = allBatches.filter(b => 
-            b.productId === targetProdId || String(b.productId) === String(targetProdId)
-          );
+          // Use indexed lookup rather than reading the entire table repeatedly
+          const productBatches = await db.batches.where('productId').equals(targetProdId).toArray();
 
           // Sort batches by expiryDate ascending (soonest expiring first)
           productBatches.sort((a, b) => (a.expiryDate || '').localeCompare(b.expiryDate || ''));

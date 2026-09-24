@@ -473,17 +473,107 @@ Total TTC : 952.00 DA`);
   }
 
   function localCatalogMatch(items, products) {
-    return (items || []).map(item => {
+    if (!Array.isArray(items) || !items.length) return [];
+    if (!Array.isArray(products) || !products.length) return items;
+
+    // Fast indexing: Build a token-to-products inverted map for candidate pruning
+    const tokenIndex = new Map();
+    const cleanProdCache = new Array(products.length);
+
+    for (let i = 0; i < products.length; i++) {
+      const p = products[i];
+      const cleanName = cleanString(p.name);
+      cleanProdCache[i] = cleanName;
+      const tokens = cleanName.split(/\s+/);
+      for (const t of tokens) {
+        if (t.length >= 3) {
+          let list = tokenIndex.get(t);
+          if (!list) {
+            list = [];
+            tokenIndex.set(t, list);
+          }
+          if (list.length < 50) { // Keep top candidates per token
+            list.push(i);
+          }
+        }
+      }
+    }
+
+    return items.map(item => {
+      const desc = item.description || item.rawDescription || '';
+      const cleanDesc = cleanString(desc);
+      if (!cleanDesc) {
+        return {
+          ...item,
+          packMultiplier: item.packMultiplier || 1,
+          discount: item.discount || 0,
+          matchedProductId: null,
+          matchedProduct: null,
+          matchScore: 0,
+          matchTier: 'unmatched',
+          topCandidates: []
+        };
+      }
+
+      // Gather candidate product indices based on shared tokens
+      const candidateIndices = new Set();
+      const descTokens = cleanDesc.split(/\s+/).filter(t => t.length >= 3);
+      for (const t of descTokens) {
+        const matches = tokenIndex.get(t);
+        if (matches) {
+          for (const idx of matches) {
+            candidateIndices.add(idx);
+          }
+        }
+      }
+
+      // If no candidate from token index (or very few), fallback to a sample slice instead of all 42k
+      const candidateList = candidateIndices.size > 0 
+        ? Array.from(candidateIndices)
+        : Array.from({ length: Math.min(products.length, 300) }, (_, i) => i);
+
+      const scoredCandidates = [];
       let best = null;
       let maxScore = 0;
 
-      for (const p of products) {
-        const sim = computeSimilarity(item.description, p.name);
+      for (const idx of candidateList) {
+        const p = products[idx];
+        const pClean = cleanProdCache[idx];
+        let sim = 0;
+
+        if (cleanDesc === pClean) {
+          sim = 1.0;
+        } else if (cleanDesc.includes(pClean) || pClean.includes(cleanDesc)) {
+          sim = 0.85 + 0.15 * (Math.min(cleanDesc.length, pClean.length) / Math.max(cleanDesc.length, pClean.length));
+        } else {
+          // Fast Jaccard without heavy Set allocations
+          let common = 0;
+          for (const dt of descTokens) {
+            if (pClean.includes(dt)) common++;
+          }
+          sim = descTokens.length > 0 ? (common / descTokens.length) * 0.8 : 0;
+        }
+
+        if (sim > 0.35) {
+          scoredCandidates.push({
+            id: p.id,
+            name: p.name,
+            icon: p.icon || '📦',
+            score: Math.round(sim * 100),
+            costPrice: p.costPrice,
+            sellingPrice: p.sellingPrice,
+            currentStock: p.currentStock
+          });
+        }
+
         if (sim > maxScore) {
           maxScore = sim;
           best = p;
         }
       }
+
+      scoredCandidates.sort((a, b) => b.score - a.score);
+      const topCandidates = scoredCandidates.slice(0, 5);
 
       const score = Math.round(maxScore * 100);
       const tier = score >= 75 ? 'high' : (score >= 45 ? 'medium' : 'unmatched');
@@ -503,7 +593,8 @@ Total TTC : 952.00 DA`);
           icon: best.icon || '📦'
         } : null,
         matchScore: score,
-        matchTier: tier
+        matchTier: tier,
+        topCandidates: topCandidates
       };
     });
   }
@@ -611,8 +702,8 @@ Total TTC : 952.00 DA`);
     if (!itemsContainer) return;
     itemsContainer.innerHTML = '';
 
-    const catalogProducts = await window.FlexiDB.db.products.toArray();
-
+    // Instead of mapping 42,000 products into every single line item's <select> (which creates ~840,000 DOM elements and crashes the browser),
+    // we use a streamlined product selector showing top candidates + selected item, backed by search
     (scanData.items || []).forEach((item, index) => {
       item.packMultiplier = item.packMultiplier || 1;
       item.discount = item.discount || 0;
@@ -627,6 +718,19 @@ Total TTC : 952.00 DA`);
         '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">🟡 Suggestion (' + (item.matchScore || 50) + '%)</span>' :
         '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700">🔴 Nouveau</span>');
 
+      // Build options with currently matched product and suggested products only
+      const selectedId = item.matchedProductId;
+      let optionsHtml = '<option value="">-- Non lié (Créer nouveau produit) --</option>';
+      if (item.matchedProduct) {
+        optionsHtml += `<option value="${item.matchedProduct.id}" selected>✓ ${item.matchedProduct.icon || '📦'} ${escapeHtml(item.matchedProduct.name)} (Stock: ${item.matchedProduct.currentStock || 0} | Achat: ${item.matchedProduct.costPrice || 0} DA)</option>`;
+      }
+      if (Array.isArray(item.topCandidates)) {
+        item.topCandidates.forEach(cand => {
+          if (cand.id !== selectedId) {
+            optionsHtml += `<option value="${cand.id}">${cand.icon || '📦'} ${escapeHtml(cand.name)} (${cand.score}%)</option>`;
+          }
+        });
+      }
       itemRow.innerHTML = `
         <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
           <div class="flex items-center gap-2 flex-1 min-w-[220px]">
@@ -651,8 +755,7 @@ Total TTC : 952.00 DA`);
           <div class="col-span-2 sm:col-span-4">
             <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Produit en Magasin</label>
             <select id="scaniq-prod-select-${index}" onchange="window.ScanIQService.handleProductChange(${index}, this.value)" class="w-full px-2 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500">
-              <option value="">-- Non lié (Créer nouveau) --</option>
-              ${catalogProducts.map(p => `<option value="${p.id}" ${item.matchedProductId === p.id ? 'selected' : ''}>${p.icon || '📦'} ${escapeHtml(p.name)} (Stock: ${p.currentStock || 0} | Achat: ${p.costPrice || 0} DA)</option>`).join('')}
+              ${optionsHtml}
             </select>
           </div>
 
@@ -1138,11 +1241,15 @@ Total TTC : 952.00 DA`);
         const unitsToAdd = qtyEntered * packMult;
         const unitCostPrice = packMult > 1 ? (Number(item.unitPrice) / packMult) : Number(item.unitPrice);
 
-        if (item.matchedProductId) {
-          const prod = await d.products.get(item.matchedProductId);
+        const resolvedProdId = item.matchedProductId != null && !isNaN(Number(item.matchedProductId)) 
+          ? Number(item.matchedProductId) 
+          : item.matchedProductId;
+
+        if (resolvedProdId) {
+          const prod = await d.products.get(resolvedProdId);
           const prevStock = prod ? (Number(prod.currentStock) || 0) : 0;
 
-          await d.products.where('id').equals(item.matchedProductId).modify(p => {
+          await d.products.where('id').equals(resolvedProdId).modify(p => {
             p.currentStock = (Number(p.currentStock) || 0) + unitsToAdd;
             if (unitCostPrice > 0) {
               p.costPrice = Math.round(unitCostPrice * 100) / 100;
@@ -1152,7 +1259,7 @@ Total TTC : 952.00 DA`);
 
           // Stock log audit
           await d.stockLogs.add({
-            productId: item.matchedProductId,
+            productId: resolvedProdId,
             timestamp: now,
             type: 'RESTOCK',
             quantityChange: unitsToAdd,
@@ -1162,15 +1269,17 @@ Total TTC : 952.00 DA`);
             note: `Réception ScanIQ #${invNum} (${supplierName}) - ${qtyEntered} ${packMult > 1 ? 'pack(s) x' + packMult : 'unité(s)'}`
           });
         } else if (item.description && item.description.trim()) {
-          // Auto-create newly entered product in catalog
+          // Auto-create newly entered product in catalog with guaranteed unique barcode
+          const uniqueBarcode = '890' + Date.now().toString().slice(-6) + Math.floor(100 + Math.random() * 900);
           const newProdId = await d.products.add({
             name: item.description.trim(),
+            barcode: uniqueBarcode,
             category: 'General',
             unit: 'U',
             costPrice: Math.round(unitCostPrice * 100) / 100,
             sellingPrice: Math.round(unitCostPrice * 1.3 * 100) / 100,
             currentStock: unitsToAdd,
-            minStockAlert: 5,
+            lowStockThreshold: 5,
             icon: '📦',
             createdAt: now,
             updatedAt: now
@@ -1184,7 +1293,7 @@ Total TTC : 952.00 DA`);
             previousStock: 0,
             newStock: unitsToAdd,
             referenceId: `INV_${invNum}`,
-            note: `Nouveau produit créé via ScanIQ #${invNum}`
+            note: `Nouveau produit créé via ScanIQ #${invNum} (Code-barres: ${uniqueBarcode})`
           });
         }
       }

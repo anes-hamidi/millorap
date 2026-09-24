@@ -89,16 +89,35 @@
     saveWeights() {
       if (typeof localStorage !== 'undefined') {
         try {
-          localStorage.setItem(this.storageKey, JSON.stringify({
+          // Keep only top informative vocabulary tokens (max 1,200) to keep JSON payload well below 300KB
+          const compactWordFreq = {};
+          const activeVocab = new Set();
+
+          for (const c of (this.model.classes || [])) {
+            const freqs = this.model.wordFrequencyPerClass[c] || {};
+            compactWordFreq[c] = {};
+            const sortedEntries = Object.entries(freqs)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 100); // top 100 words per supplier
+
+            for (const [w, count] of sortedEntries) {
+              compactWordFreq[c][w] = count;
+              activeVocab.add(w);
+            }
+          }
+
+          const payload = JSON.stringify({
             classes: this.model.classes,
             totalDocs: this.model.totalDocs,
             classDocCounts: this.model.classDocCounts,
             classWordCounts: this.model.classWordCounts,
-            wordFrequencyPerClass: this.model.wordFrequencyPerClass,
-            vocabulary: Array.from(this.vocabSet)
-          }));
+            wordFrequencyPerClass: compactWordFreq,
+            vocabulary: Array.from(activeVocab)
+          });
+
+          localStorage.setItem(this.storageKey, payload);
         } catch (e) {
-          console.warn('[ScanIQ Classifier] Could not persist weights:', e);
+          console.warn('[ScanIQ Classifier] Could not persist weights (quota safeguard active):', e.message);
         }
       }
     }

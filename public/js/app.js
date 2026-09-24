@@ -275,7 +275,17 @@ async function renderInventoryWorkspace(resetPage = true) {
     let filtered = [];
     let totalMatched = 0;
 
-    if (window.FlexiDB.getProductsPaged) {
+    if (window.SearchEngine && window.SearchEngine.isReady()) {
+      const res = await window.SearchEngine.search({
+        category: catVal,
+        query: searchVal,
+        stockFilter: stockFilter,
+        page: invCurrentPage,
+        pageSize: INV_PAGE_SIZE
+      });
+      filtered = res.products || [];
+      totalMatched = res.total || 0;
+    } else if (window.FlexiDB.getProductsPaged) {
       const res = await window.FlexiDB.getProductsPaged({
         category: catVal,
         search: searchVal,
@@ -2689,7 +2699,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let invSearchTimer = null;
   document.getElementById('inventory-search-input')?.addEventListener('input', () => {
     clearTimeout(invSearchTimer);
-    invSearchTimer = setTimeout(renderInventoryWorkspace, 120);
+    invSearchTimer = setTimeout(renderInventoryWorkspace, 250);
   });
   document.getElementById('inventory-category-filter')?.addEventListener('change', renderInventoryWorkspace);
   document.getElementById('inventory-stock-filter')?.addEventListener('change', renderInventoryWorkspace);

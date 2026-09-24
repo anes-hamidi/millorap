@@ -109,9 +109,19 @@
       d.debts.toArray()
     ]);
 
+    // Build customerId -> debts array hash map for O(N + M) aggregation
+    const debtsByCust = new Map();
+    for (const de of debts) {
+      const cId = de.customerId;
+      if (!debtsByCust.has(cId)) {
+        debtsByCust.set(cId, []);
+      }
+      debtsByCust.get(cId).push(de);
+    }
+
     return customers
       .map(c => {
-        const cDebts    = debts.filter(de => de.customerId === c.id);
+        const cDebts    = debtsByCust.get(c.id) || [];
         const openDebts = cDebts.filter(de => de.status === 'open');
         const totalOwed      = cDebts.reduce((s, de) => s + (Number(de.amount) || 0), 0);
         const totalRemaining = openDebts.reduce((s, de) => s + (Number(de.remainingAmount) || 0), 0);

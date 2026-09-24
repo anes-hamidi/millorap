@@ -265,6 +265,8 @@
       posCurrentPage = 0;
       posHasMore = true;
       posProducts = [];
+      productMap.clear();
+      barcodeMap.clear();
     }
 
     if (posIsLoading || (!posHasMore && !reset)) return;
@@ -279,7 +281,16 @@
       let pageProducts = [];
       let hasMoreItems = false;
 
-      if (window.FlexiDB && window.FlexiDB.getProductsPaged) {
+      if (window.SearchEngine && window.SearchEngine.isReady()) {
+        const res = await window.SearchEngine.search({
+          category: posActiveCategory,
+          query: searchTerm,
+          page: posCurrentPage,
+          pageSize: POS_PAGE_SIZE
+        });
+        pageProducts = res.products || [];
+        hasMoreItems = res.hasMore;
+      } else if (window.FlexiDB && window.FlexiDB.getProductsPaged) {
         const res = await window.FlexiDB.getProductsPaged({
           category: posActiveCategory,
           search: searchTerm,

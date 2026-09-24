@@ -610,13 +610,19 @@
         }
       }
 
-      // Chunked bulk put into db.products
+      // Chunked bulk insert / update into db.products
       for (let i = 0; i < total; i += chunkSize) {
         const chunk = products.slice(i, i + chunkSize);
         
         await db.transaction('rw', db.products, async () => {
+          const chunkBarcodes = chunk.map(c => c.barcode).filter(Boolean);
+          const existingList = await db.products.where('barcode').anyOf(chunkBarcodes).toArray();
+          const existingMap = new Map(existingList.map(e => [e.barcode, e.id]));
+
+          const toPut = [];
           for (const item of chunk) {
             const { tva, vat, ...cleanItem } = item; // Explicitly ensure zero TVA
+            const existingId = existingMap.get(cleanItem.barcode);
             const normalizedItem = {
               ...cleanItem,
               currentStock: Number(cleanItem.currentStock) || 50,
@@ -626,14 +632,13 @@
               unitsPerPack: Number(cleanItem.unitsPerPack) || 1,
               sellByPackDefault: Boolean(cleanItem.sellByPackDefault)
             };
-
-            const existing = await db.products.where('barcode').equals(normalizedItem.barcode).first();
-            if (existing) {
-              await db.products.update(existing.id, normalizedItem);
-            } else {
-              await db.products.add(normalizedItem);
+            if (existingId) {
+              normalizedItem.id = existingId;
             }
+            toPut.push(normalizedItem);
           }
+
+          await db.products.bulkPut(toPut);
         });
 
         inserted += chunk.length;
