@@ -95,6 +95,7 @@
     await renderPosProducts(true);
     updateLowStockBadge();
     updateExpiryBadge();
+    updateStockConflictBadge();
     updateSyncBadge();
   }
 
@@ -152,6 +153,39 @@
   }
   window.updateExpiryBadge = updateExpiryBadge;
 
+  async function updateStockConflictBadge() {
+    try {
+      if (!window.AnalyticsService?.getStockConflicts) return;
+      const conflicts = await window.AnalyticsService.getStockConflicts('open');
+      const count = conflicts.length;
+      const badge = document.getElementById('stock-conflict-badge');
+      const navBadge = document.getElementById('nav-conflicts-badge');
+
+      if (badge) {
+        if (count > 0) {
+          badge.classList.remove('hidden');
+          badge.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700 animate-pulse cursor-pointer';
+          badge.innerHTML = `<span>⚠️</span> <span>${count} Conflit(s) Stock</span>`;
+        } else {
+          badge.classList.add('hidden');
+        }
+      }
+
+      if (navBadge) {
+        if (count > 0) {
+          navBadge.classList.remove('hidden');
+          navBadge.innerText = count;
+          navBadge.className = 'nav-badge-pill text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-500 text-white animate-pulse';
+        } else {
+          navBadge.classList.add('hidden');
+        }
+      }
+    } catch (e) {
+      console.warn('updateStockConflictBadge error:', e);
+    }
+  }
+  window.updateStockConflictBadge = updateStockConflictBadge;
+
   function updateSyncBadge() {
     const badge = document.getElementById('sync-status-badge');
     if (!badge) return;
@@ -161,20 +195,47 @@
 
     if (db && db.cloud && typeof db.cloud.syncState?.subscribe === 'function') {
       try {
+        db.cloud.currentUser?.subscribe(user => {
+          const isAuthenticated = user && user.isLoggedIn;
+          if (isAuthenticated) {
+            badge.title = `Dexie Cloud Authenticated: ${user.name || user.email || user.userId} (${terminalId})`;
+          } else {
+            badge.title = `Dexie Cloud: Authentication Required (${terminalId})`;
+          }
+        });
+
         db.cloud.syncState.subscribe(state => {
           if (!state) return;
+          const user = db.cloud.currentUser?.value;
+          const isAuthenticated = user && user.isLoggedIn;
+
+          if (!isAuthenticated && db.cloud.options?.requireAuth) {
+            badge.className = 'flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800 cursor-pointer';
+            badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span> <span>Connexion Requise (${terminalId})</span>`;
+            badge.onclick = () => {
+              if (typeof db.cloud.login === 'function') {
+                db.cloud.login().catch(err => console.warn('Login prompt:', err));
+              }
+            };
+            return;
+          }
+
           if (state.phase === 'in-sync' || state.status === 'online') {
             badge.className = 'flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800';
-            badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> <span>Cloud (${terminalId})</span>`;
+            badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> <span>Cloud Synchronisé (${terminalId})</span>`;
+            badge.onclick = null;
           } else if (state.phase === 'connecting' || state.phase === 'syncing') {
             badge.className = 'flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 animate-pulse';
             badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-indigo-500"></span> <span>Synchro...</span>`;
+            badge.onclick = null;
           } else if (state.status === 'offline') {
             badge.className = 'flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800';
             badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500"></span> <span>Hors-ligne (${terminalId})</span>`;
+            badge.onclick = null;
           } else if (state.phase === 'error') {
             badge.className = 'flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800';
             badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-500"></span> <span>Erreur Sync</span>`;
+            badge.onclick = null;
           }
         });
         return;
@@ -184,6 +245,7 @@
     // Default standalone / local indicator
     badge.className = 'flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
     badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> <span>Local (${terminalId})</span>`;
+    badge.onclick = null;
   }
   window.updateSyncBadge = updateSyncBadge;
 
@@ -600,6 +662,7 @@
       }
     }
   }
+  window.handleScannedBarcode = handleScannedBarcode;
 
   // --- Product Modal & IndexedDB CRUD ---
   window.openProductModal = (productToEdit = null, prefilledBarcode = '') => {
@@ -1080,7 +1143,12 @@
     }
 
     if (posCart.length === 0) {
-      container.innerHTML = `<div class="text-slate-400 text-xs py-8 text-center">Votre panier est vide. Scannez un article ou cliquez sur le catalogue.</div>`;
+      container.innerHTML = `
+        <div class="reg-empty-state">
+          <span class="text-4xl mb-2">🏷️</span>
+          <span class="text-base font-bold text-slate-200">Prêt à scanner</span>
+          <span class="text-xs text-slate-400 max-w-xs">Passez les articles devant le lecteur code-barres pour les ajouter directement au ticket.</span>
+        </div>`;
       return;
     }
 
@@ -1093,32 +1161,35 @@
       const hasPackOption = item.unitsPerPack && item.unitsPerPack > 1;
 
       return `
-      <div class="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/70 dark:border-slate-700/60 flex items-center justify-between gap-2.5 transition ${isJustAdded ? 'pos-scan-highlight' : ''}">
-        <div class="flex flex-col min-w-0 flex-1">
-          <div class="flex items-center gap-1.5">
-            <span class="font-bold text-slate-800 dark:text-slate-100 text-xs truncate">${escapeHtml(item.name)}</span>
-            ${hasPackOption ? `
-              <button onclick="window.toggleCartItemUnit('${safeId}', '${itemUnit}')" class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase transition shrink-0 ${isPack ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 hover:bg-purple-200' : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 hover:bg-slate-300'}" title="Cliquer pour basculer Unité / Pack">
-                ${isPack ? `📦 ${escapeHtml(item.packUnitLabel || 'Pack')} (×${item.unitsPerPack})` : '🏷️ Unité'} ⇄
-              </button>
-            ` : ''}
-          </div>
-          <div class="flex items-center gap-2 mt-0.5 text-[11px] font-mono text-slate-500 dark:text-slate-400 tabular-nums">
-            <span>${item.price.toFixed(2)} DA</span>
-            <span>×</span>
-            <span class="font-bold text-slate-700 dark:text-slate-200">${item.qty}</span>
-            <span>=</span>
-            <span class="font-black text-indigo-600 dark:text-indigo-400">${lineTotal} DA</span>
+      <div class="reg-cart-row ${isJustAdded ? 'pos-scan-highlight' : ''}">
+        <!-- Col 1: Article Name & Pack toggle -->
+        <div class="flex flex-col min-w-0 pr-1">
+          <span class="font-bold text-slate-100 text-xs truncate" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+          ${hasPackOption ? `
+            <button onclick="window.toggleCartItemUnit('${safeId}', '${itemUnit}')" class="reg-pack-toggle-btn ${isPack ? 'reg-pack-active' : ''}" title="Cliquer pour basculer Unité / Pack">
+              ${isPack ? `📦 ${escapeHtml(item.packUnitLabel || 'Pack')} (×${item.unitsPerPack})` : '🏷️ Unité'} ⇄
+            </button>
+          ` : ''}
+        </div>
+
+        <!-- Col 2: Qté Stepper -->
+        <div class="flex items-center justify-center">
+          <div class="reg-qty-stepper">
+            <button onclick="changeCartQty('${safeId}', -1, '${itemUnit}')" class="reg-qty-btn" title="Diminuer">-</button>
+            <span class="reg-qty-val font-mono">${item.qty}</span>
+            <button onclick="changeCartQty('${safeId}', 1, '${itemUnit}')" class="reg-qty-btn" title="Augmenter">+</button>
           </div>
         </div>
 
-        <div class="flex items-center gap-1.5 shrink-0">
-          <div class="flex items-center border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-            <button onclick="changeCartQty('${safeId}', -1, '${itemUnit}')" class="w-8 h-8 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-extrabold text-sm active:scale-95 transition" title="Diminuer">-</button>
-            <span class="px-2 text-xs font-mono font-black text-slate-900 dark:text-slate-100 tabular-nums">${item.qty}</span>
-            <button onclick="changeCartQty('${safeId}', 1, '${itemUnit}')" class="w-8 h-8 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-extrabold text-sm active:scale-95 transition" title="Augmenter">+</button>
-          </div>
-          <button onclick="removeFromPosCart('${safeId}', '${itemUnit}')" class="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-bold transition" title="Supprimer l'article">✕</button>
+        <!-- Col 3: Prix Unit. -->
+        <div class="text-right font-mono text-slate-300 text-xs font-semibold tabular-nums">
+          ${item.price.toFixed(2)} DA
+        </div>
+
+        <!-- Col 4: Total & Delete -->
+        <div class="flex items-center justify-end gap-1.5 min-w-0">
+          <span class="font-mono text-emerald-400 font-black text-xs tabular-nums">${lineTotal} DA</span>
+          <button onclick="removeFromPosCart('${safeId}', '${itemUnit}')" class="reg-row-del-btn" title="Supprimer cet article du panier">✕</button>
         </div>
       </div>
     `;
@@ -2462,6 +2533,7 @@
     syncCategoriesUI: syncCategoriesUI,
     openCategoryManagerModal: openCategoryManagerModal,
     updateExpiryBadge: updateExpiryBadge,
+    updateStockConflictBadge: updateStockConflictBadge,
     updateSyncBadge: updateSyncBadge
   };
 

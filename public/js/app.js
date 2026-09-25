@@ -579,10 +579,98 @@ async function renderAnalyticsWorkspace(windowPeriod = '30days') {
       }
     }
 
+    // 6. Stock Conflicts (Multi-Register Negative Stock Detection & Reconciliation)
+    if (window.AnalyticsService?.getStockConflicts) {
+      try {
+        const conflicts = await window.AnalyticsService.getStockConflicts('open');
+        const conflictsContainer = document.getElementById('page-analytics-stock-conflicts');
+        const conflictsCountEl = document.getElementById('page-analytics-conflicts-count');
+        if (conflictsCountEl) {
+          conflictsCountEl.innerText = `${conflicts.length} Conflit(s)`;
+          conflictsCountEl.className = `text-[10px] font-bold px-2 py-0.5 rounded-full ${conflicts.length > 0 ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 animate-pulse' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`;
+        }
+        if (conflictsContainer) {
+          if (conflicts.length === 0) {
+            conflictsContainer.innerHTML = '<span class="text-emerald-600 text-xs font-semibold py-4 text-center">✅ Aucun conflit de stock négatif détecté.</span>';
+          } else {
+            conflictsContainer.innerHTML = conflicts.map(c => `
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-xs">
+                <div class="flex flex-col min-w-0">
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-bold text-rose-800 dark:text-rose-200 truncate">${escapeHtml(c.productName || 'Produit')}</span>
+                    <span class="text-[10px] text-slate-400 font-mono">(${escapeHtml(c.barcode || c.productId)})</span>
+                  </div>
+                  <span class="text-[10px] text-slate-400">Détecté le ${new Date(c.detectedAt).toLocaleString()}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-black bg-rose-600 text-white">${c.currentStock} u.</span>
+                  <button onclick="openResolveConflictModal('${escapeHtml(String(c.id))}')" class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300 hover:bg-rose-50 text-[11px] font-bold transition">
+                    Résoudre
+                  </button>
+                </div>
+              </div>
+            `).join('');
+          }
+        }
+        if (window.POS?.updateStockConflictBadge) {
+          await window.POS.updateStockConflictBadge();
+        }
+      } catch (confErr) {
+        console.warn('Stock conflicts render error:', confErr);
+      }
+    }
+
   } catch (err) {
     console.error('Analytics workspace error:', err);
   }
 }
+
+async function openResolveConflictModal(conflictId) {
+  if (!window.FlexiDB || !window.FlexiDB.db) return;
+  const db = window.FlexiDB.db;
+  try {
+    const numericId = Number(conflictId);
+    const targetId = isNaN(numericId) ? conflictId : numericId;
+    const conflict = await db.stockConflicts.get(targetId);
+    if (!conflict) {
+      showToast('Conflit introuvable', 'error');
+      return;
+    }
+    const product = await db.products.get(conflict.productId) || {};
+    
+    document.getElementById('conflict-modal-id').value = conflict.id;
+    document.getElementById('conflict-modal-product-name').innerText = product.name || 'Produit Inconnu';
+    document.getElementById('conflict-modal-stock-badge').innerText = `${conflict.currentStock} u.`;
+    document.getElementById('conflict-resolution-note').value = '';
+    document.getElementById('conflict-resolved-by').value = localStorage.getItem('pos_terminal_id') ? `Caissier (${localStorage.getItem('pos_terminal_id')})` : 'Manager';
+    document.getElementById('stock-conflict-modal')?.classList.remove('hidden');
+  } catch (e) {
+    console.error('Error opening conflict modal:', e);
+  }
+}
+window.openResolveConflictModal = openResolveConflictModal;
+
+async function handleResolveConflictSubmit(e) {
+  e.preventDefault();
+  const conflictId = document.getElementById('conflict-modal-id')?.value;
+  const resolvedBy = document.getElementById('conflict-resolved-by')?.value || 'Manager';
+  const resolutionNote = document.getElementById('conflict-resolution-note')?.value || '';
+
+  if (!conflictId) return;
+
+  try {
+    const numericId = Number(conflictId);
+    const targetId = isNaN(numericId) ? conflictId : numericId;
+    await window.FlexiDB.resolveStockConflict(targetId, { resolvedBy, resolutionNote });
+    document.getElementById('stock-conflict-modal')?.classList.add('hidden');
+    showToast('Conflit de stock marqué comme résolu !', 'success');
+    if (window.renderAnalyticsWorkspace) await window.renderAnalyticsWorkspace();
+    if (window.POS?.updateStockConflictBadge) await window.POS.updateStockConflictBadge();
+  } catch (err) {
+    showToast('Erreur résolution conflit: ' + err.message, 'error');
+  }
+}
+window.handleResolveConflictSubmit = handleResolveConflictSubmit;
 window.renderAnalyticsWorkspace = renderAnalyticsWorkspace;
 
 // ==========================================
@@ -2849,6 +2937,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     } finally {
       e.target.value = '';
     }
+  });
+
+  // Stock Conflicts Modal Listeners
+  document.getElementById('close-conflict-modal-btn')?.addEventListener('click', () => {
+    document.getElementById('stock-conflict-modal')?.classList.add('hidden');
+  });
+  document.getElementById('cancel-conflict-modal-btn')?.addEventListener('click', () => {
+    document.getElementById('stock-conflict-modal')?.classList.add('hidden');
   });
 
   if (window.QRGenerator?.init) window.QRGenerator.init();

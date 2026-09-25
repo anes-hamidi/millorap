@@ -238,10 +238,53 @@ const qty = Number(b.remainingQty != null ? b.remainingQty :
     };
   }
 
+  /**
+   * Fetch stock conflicts and enrich with product metadata.
+   * @param {'open' | 'resolved' | 'all'} status
+   * @returns {Promise<Array>}
+   */
+  async function getStockConflicts(status = 'open') {
+    if (!window.FlexiDB || !window.FlexiDB.db) return [];
+    const db = window.FlexiDB.db;
+    if (!db.stockConflicts) return [];
+
+    try {
+      let conflicts;
+      if (status === 'all') {
+        conflicts = await db.stockConflicts.reverse().toArray();
+      } else {
+        conflicts = await db.stockConflicts.where('status').equals(status).reverse().toArray();
+      }
+
+      if (!conflicts || conflicts.length === 0) return [];
+
+      const productIds = Array.from(new Set(conflicts.map(c => c.productId)));
+      const products = await db.products.where('id').anyOf(productIds).toArray();
+      const prodMap = new Map(products.map(p => [p.id, p]));
+
+      return conflicts.map(c => {
+        const prod = prodMap.get(c.productId) || {};
+        return {
+          ...c,
+          productName: prod.name || 'Produit Inconnu',
+          barcode: prod.barcode || '',
+          category: prod.category || 'Général',
+          icon: prod.icon || '⚠️',
+          realStock: prod.currentStock != null ? prod.currentStock : c.currentStock
+        };
+      });
+    } catch (e) {
+      console.warn('[AnalyticsService] getStockConflicts error:', e);
+      return [];
+    }
+  }
+
   window.AnalyticsService = {
     getLowStockProducts,
     getExpiringBatches,
     getTopSellingProducts,
-    getRevenueAnalytics
+    getRevenueAnalytics,
+    getStockConflicts
   };
 })();
+

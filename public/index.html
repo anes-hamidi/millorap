@@ -28,6 +28,7 @@
   <link rel="manifest" href="manifest.json">
   <!-- Custom CSS -->
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="register-theme.css">
 </head>
 <body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen flex transition-colors duration-300 antialiased selection:bg-indigo-500 selection:text-white overflow-x-hidden">
 
@@ -114,6 +115,7 @@
             <span class="sidebar-expanded-only">Sales & Analytics</span>
           </div>
           <span class="nav-compact-label">Ventes</span>
+          <span id="nav-conflicts-badge" class="nav-badge-pill hidden text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-500 text-white animate-pulse">0</span>
           <span class="sidebar-expanded-only text-[10px] text-slate-400">Reports</span>
         </button>
 
@@ -228,6 +230,11 @@
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
             <span>Cloud Sync</span>
           </div>
+
+          <!-- Stock Conflicts Alert Pill (Task 2) -->
+          <button id="stock-conflict-badge" onclick="switchAppMode('analytics')" class="hidden px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700 flex items-center gap-1.5 animate-pulse" title="Conflits de stock négatif détectés">
+            <span>⚠️</span> <span>0 Conflit Stock</span>
+          </button>
 
           <!-- Expiry Alert Pill (Task 3) -->
           <button id="expiry-alert-badge" onclick="switchAppMode('analytics')" class="hidden px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-1.5" title="Articles proches de la date de péremption">
@@ -877,217 +884,232 @@
     <!-- END SECTION 2: Shop Print Center -->
 
     <!-- SECTION 3: POS Terminal (Secondary Page) -->
-    <div id="section-pos-app" class="workspace-section hidden grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+<!--
+  MILLORA POS — Register layout
+  ==============================
+  How to integrate:
+  1. Add to <head>:  <link rel="stylesheet" href="pos-register-theme.css">
+  2. Replace the ENTIRE existing <div id="section-pos-app" ...> ... </div>
+     block in index.html with everything below.
+  3. Before </body>, add: <script src="pos-register.js?v=4.0"></script>
+     (after js/pos.js, before js/app.js is fine either order).
+  No changes to js/pos.js, js/checkoutService.js, js/debtService.js, etc.
+  are required — every id() it queries (pos-search-input, pos-cart-items,
+  pos-total, pos-checkout-btn, pos-category-filters, ...) still exists here.
 
-      <!-- Proactive Backup Reminder Banner -->
-      <div id="pos-backup-reminder-banner" class="hidden col-span-full mb-2 p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/80 flex items-center justify-between text-xs text-amber-800 dark:text-amber-200 shadow-sm animate-pulse">
-        <div class="flex items-center gap-2">
-          <span class="text-base">⚠️</span>
-          <span><strong>Backup Reminder:</strong> It has been over 7 days since your last database backup. Protect your business records!</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <button id="pos-banner-backup-now-btn" class="px-3 py-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold transition shadow-sm">Backup Now</button>
-          <button id="pos-banner-dismiss-btn" class="p-1 text-amber-500 hover:text-amber-700">✕</button>
-        </div>
-      </div>
-  
+  Layout: Payment (left) · Invoice / cart (center, largest) · Product list
+  (right, a tap-to-add ListView instead of a card grid). See
+  pos-register-theme.css for how the grid is reflowed at each breakpoint.
+-->
+<div id="section-pos-app" class="workspace-section hidden">
 
-      
-      <!-- LEFT COLUMN: Product Inventory & Catalog Grid (8 Cols) -->
-      <div class="lg:col-span-8 flex flex-col gap-6">
-        
-        <!-- POS Header & Category Filters -->
-        <div class="glass-panel p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-4">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-2">
-              <h2 class="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <span>🛒</span> Product Catalog
-              </h2>
-              <span id="low-stock-alert-badge" class="hidden px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 animate-pulse">0 Low Stock</span>
-              <span id="pos-scanner-status" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Scanner Active
-              </span>
-            </div>
-
-            <div class="flex items-center gap-2 flex-wrap">
-              <input type="text" id="pos-search-input" placeholder="Search name or scan barcode..." class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-indigo-500 outline-none w-48 transition">
-              
-              <button id="open-pos-analytics-btn" class="px-3 py-2 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 text-xs font-bold flex items-center gap-1.5 transition shadow-sm" title="Local Financial & Stock Analytics">
-                <span>📈</span> <span>Analytics</span>
-              </button>
-
-              <button id="open-pos-backup-btn" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center gap-1.5 transition" title="JSON & CSV Backup / Restore">
-                <span>💾</span> <span>Backup</span>
-              </button>
-
-              <button id="open-cam-scanner-btn" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition" title="Scan with Camera">
-                <span>📷</span> <span>Camera</span>
-              </button>
-
-              <button id="open-scanner-config-btn" class="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition" title="Configure Barcode Scanner Hardware">
-                <span>⚙️</span> <span>Setup</span>
-              </button>
-
-              <button onclick="openCategoryManagerModal()" class="px-3 py-2 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 text-xs font-bold flex items-center gap-1.5 transition shadow-sm" title="Gérer les Catégories">
-                <span>🏷️</span> <span>Catégories</span>
-              </button>
-
-              <button id="open-add-product-btn" class="btn-gradient text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition">
-                <span>➕</span> <span>New Item</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Category Pills -->
-          <div id="pos-category-filters" class="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-            <button data-category="all" class="pos-cat-btn active px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white transition-all shadow-sm">All Items</button>
-            <button data-category="Beverage" class="pos-cat-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Beverages</button>
-            <button data-category="Bakery" class="pos-cat-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Bakery</button>
-            <button data-category="Printing" class="pos-cat-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Printing</button>
-            <button data-category="Electronics" class="pos-cat-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Electronics</button>
-            <button data-category="Supplies" class="pos-cat-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Supplies</button>
-          </div>
-        </div>
-
-        <!-- Product Grid -->
-        <div id="pos-product-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-          <div class="text-slate-400 text-xs p-8 text-center col-span-full">Loading catalog items...</div>
-        </div>
-
-        <!-- POS Infinite Scroll Sentinel & Loader -->
-        <div id="pos-scroll-sentinel" class="py-4 text-center text-xs font-semibold text-slate-400 hidden">
-          <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800">
-            <svg class="animate-spin h-3.5 w-3.5 text-indigo-500" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
-            Chargement d'autres produits...
-          </span>
-        </div>
-
-      </div>
-
-      <!-- RIGHT COLUMN: Order Cart & Checkout Summary (4 Cols) -->
-      <div class="lg:col-span-4 flex flex-col gap-6 lg:sticky lg:top-24">
-        
-        <!-- Cart Card -->
-        <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xl flex flex-col gap-4">
-          
-          <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
-            <h3 class="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <span>🧾</span> Commande (<span id="pos-cart-count">0</span>)
-            </h3>
-            <div class="flex items-center gap-2">
-              <button id="pos-park-cart-btn" onclick="window.parkCurrentPosCart ? window.parkCurrentPosCart() : null" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-bold" title="Mettre ce panier en attente pour servir le client suivant">⏸️ En attente</button>
-              <button id="pos-clear-cart" class="text-xs text-rose-500 hover:underline font-medium">Vider</button>
-            </div>
-          </div>
-
-          <!-- Parked Carts Notification Bar -->
-          <div id="pos-parked-carts-bar" class="hidden p-2 bg-indigo-50 dark:bg-indigo-950/60 rounded-xl border border-indigo-200 dark:border-indigo-800 text-xs flex items-center justify-between">
-            <span class="text-indigo-900 dark:text-indigo-200 font-bold flex items-center gap-1.5">
-              <span>⏸️</span> <span id="pos-parked-carts-count">0</span> panier(s) en attente
-            </span>
-            <button onclick="window.resumeLastParkedCart ? window.resumeLastParkedCart() : null" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-[11px] shadow-sm transition">
-              Reprendre ↩
-            </button>
-          </div>
-
-          <!-- Itemized Cart List -->
-          <div id="pos-cart-items" class="max-h-64 overflow-y-auto pr-1 flex flex-col gap-2 min-h-[120px]">
-            <div class="text-slate-400 text-xs py-8 text-center">Cart is empty. Click catalog items to add.</div>
-          </div>
-
-          <!-- Order Financial Calculations -->
-          <div class="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex flex-col gap-2 text-xs">
-            <div class="flex items-center justify-between text-slate-600 dark:text-slate-400">
-              <span>Subtotal</span>
-              <span id="pos-subtotal" class="font-mono font-semibold">0.00 DA</span>
-            </div>
-
-            <div class="flex items-center justify-between text-slate-600 dark:text-slate-400">
-              <span class="flex items-center gap-1">
-                <span>Discount (%)</span>
-                <input type="number" id="pos-discount-input" value="0" min="0" max="100" class="w-12 px-1 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-center font-bold text-[11px]">
-              </span>
-              <span id="pos-discount-val" class="font-mono text-emerald-600 font-semibold">-0.00 DA</span>
-            </div>
-
-            <div class="flex items-center justify-between text-base font-extrabold text-slate-900 dark:text-slate-100 pt-2 border-t border-slate-200/80 dark:border-slate-800">
-              <span>Total Due</span>
-              <span id="pos-total" class="font-mono text-indigo-600 dark:text-indigo-400 font-extrabold">0.00 DA</span>
-            </div>
-          </div>
-
-          <!-- Payment Method: CASH ONLY -->
-          <div class="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between p-3 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 shadow-sm">
-            <div class="flex items-center gap-2.5">
-              <span class="text-xl">💵</span>
-              <div class="flex flex-col">
-                <span class="text-xs font-black text-emerald-800 dark:text-emerald-300">Paiement : Espèces (Cash)</span>
-                <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Mode caisse rapide au comptoir</span>
-              </div>
-            </div>
-            <span class="px-2 py-0.5 rounded-full bg-emerald-200 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 text-[10px] font-extrabold uppercase tracking-wide">Cash</span>
-          </div>
-
-          <!-- Parameter: Allow / Deny Invoice Printing After Checkout -->
-          <div class="p-3 rounded-2xl bg-slate-100/90 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between text-xs shadow-inner">
-            <div class="flex items-center gap-2.5 min-w-0 pr-2">
-              <span class="text-base shrink-0">🖨️</span>
-              <div class="flex flex-col min-w-0">
-                <span class="font-extrabold text-slate-800 dark:text-slate-200 text-xs">Impression du ticket</span>
-                <span id="pos-print-status-label" class="text-[10px] text-slate-400 font-medium truncate">Autorisée (Ticket imprimé après encaissement)</span>
-              </div>
-            </div>
-            <label class="relative inline-flex items-center cursor-pointer shrink-0">
-              <input type="checkbox" id="pos-toggle-auto-print" class="sr-only peer" checked>
-              <div class="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-            </label>
-          </div>
-
-          <!-- Smart Tender Preset Chips (1-Tap Fast Checkout) -->
-          <div id="pos-smart-tender-section" class="flex flex-col gap-1.5 pt-2 border-t border-slate-200/60 dark:border-slate-800">
-            <div class="flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-slate-400">
-              <span class="flex items-center gap-1"><span>⚡</span> <span>Rendu Express (1 Clic) :</span></span>
-              <span class="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">Touche Espace = Exact</span>
-            </div>
-            <div id="pos-smart-tender-chips" class="grid grid-cols-4 gap-1.5">
-              <button data-tender="exact" class="smart-tender-chip p-2 rounded-xl bg-emerald-100/90 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 font-mono font-bold text-xs border border-emerald-300/80 dark:border-emerald-700 text-center truncate">
-                Exact
-              </button>
-            </div>
-          </div>
-
-          <!-- Checkout Action Buttons (Cash & Credit) -->
-          <div class="flex flex-col gap-2">
-            <button id="pos-checkout-btn" class="btn-gradient w-full py-3.5 px-4 rounded-2xl text-xs font-extrabold text-white shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 transition active:scale-98">
-              <span id="pos-checkout-btn-icon">⚡</span> <span id="pos-checkout-btn-text">Encaisser en Espèces (Espace)</span>
-            </button>
-
-            <button id="pos-credit-checkout-btn" class="w-full py-3 px-4 rounded-2xl text-xs font-extrabold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-700/80 shadow-sm flex items-center justify-center gap-2 transition active:scale-98">
-              <span>🏦</span> <span>Vente à Crédit / Dette (F9)</span>
-            </button>
-
-            <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono px-1">
-              <span>Espace / F12 : Cash</span>
-              <span>Ctrl+D : Remise</span>
-              <span>Ctrl+E : Tiroir</span>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- POS Sales History Drawer -->
-        <div class="glass-panel p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-3">
-          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
-            <span>📊</span> Recent Completed Sales
-          </h3>
-          <div id="pos-sales-history" class="max-h-48 overflow-y-auto pr-1 flex flex-col gap-2 text-xs">
-            <div class="text-slate-400 text-center py-4 text-xs">No recent transactions yet.</div>
-          </div>
-        </div>
-
-      </div> <!-- End RIGHT COLUMN: lg:col-span-4 -->
-
+  <!-- Backup reminder banner -->
+  <div id="pos-backup-reminder-banner" class="hidden mb-3 p-3.5 rounded-2xl bg-amber-950/80 border border-amber-700/80 flex items-center justify-between text-xs text-amber-200 shadow-md animate-pulse">
+    <div class="flex items-center gap-2">
+      <span class="text-base">⚠️</span>
+      <span><strong>Rappel de Sauvegarde :</strong> Plus de 7 jours depuis votre dernière sauvegarde locale. Protégez vos données !</span>
     </div>
+    <div class="flex items-center gap-2">
+      <button id="pos-banner-backup-now-btn" class="px-3 py-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold transition shadow-sm">Sauvegarder</button>
+      <button id="pos-banner-dismiss-btn" class="p-1 text-amber-400 hover:text-amber-200" aria-label="Fermer">✕</button>
+    </div>
+  </div>
+
+  <!-- 2-COLUMN SIMPLIFIED CASHIER TERMINAL -->
+  <div class="reg-grid-simple">
+
+    <!-- ============= LEFT COLUMN: LE PANIER / TICKET DE CAISSE ============= -->
+    <section class="reg-col reg-col-ticket">
+      <div class="reg-panel reg-ticket-panel">
+        
+        <!-- Ticket Header with Actions -->
+        <div class="reg-ticket-header">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">🧾</span>
+            <span class="font-extrabold text-base text-slate-100">Ticket en cours</span>
+            <span class="reg-cart-badge"><span id="pos-cart-count">0</span> articles</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="pos-park-cart-btn" onclick="window.parkCurrentPosCart ? window.parkCurrentPosCart() : null" class="reg-action-btn-sm" title="Mettre ce panier en attente pour servir le client suivant">
+              ⏸️ En attente
+            </button>
+            <button id="pos-clear-cart" class="reg-action-btn-sm reg-action-btn-danger" title="Vider complètement le panier">
+              🗑️ Vider
+            </button>
+          </div>
+        </div>
+
+        <!-- Parked Carts Notification Strip -->
+        <div id="pos-parked-carts-bar" class="hidden reg-parked-bar">
+          <span class="font-bold flex items-center gap-1.5 text-xs">
+            <span>⏸️</span>
+            <span><strong id="pos-parked-carts-count">0</strong> panier(s) en attente</span>
+          </span>
+          <button onclick="window.resumeLastParkedCart ? window.resumeLastParkedCart() : null" class="reg-resume-btn">
+            Reprendre ↩
+          </button>
+        </div>
+
+        <!-- Table Columns Header -->
+        <div class="reg-ticket-tablehead">
+          <span>Article</span>
+          <span class="text-center">Qté</span>
+          <span class="text-right">Prix Unit.</span>
+          <span class="text-right">Total</span>
+        </div>
+
+        <!-- Scanned Items List (pos.js renders items into this ID) -->
+        <div id="pos-cart-items" class="reg-ticket-body">
+          <div class="reg-empty-state">
+            <span class="text-4xl mb-2">🏷️</span>
+            <span class="text-base font-bold text-slate-200">Prêt à scanner</span>
+            <span class="text-xs text-slate-400 max-w-xs">Passez les articles devant le lecteur code-barres pour les ajouter directement au ticket.</span>
+          </div>
+        </div>
+
+        <!-- Optional Order Note Display -->
+        <div id="reg-order-note" class="reg-order-note"></div>
+
+        <!-- Totals & Discounts Breakdown -->
+        <div class="reg-totals">
+          <div class="reg-totals-row">
+            <span>Sous-total</span>
+            <span id="pos-subtotal" class="val">0.00 DA</span>
+          </div>
+
+          <div class="reg-discount-row">
+            <div class="flex items-center gap-2">
+              <span>Remise :</span>
+              <input type="number" id="pos-discount-input" value="0" min="0" max="100" class="reg-discount-input" title="Pourcentage de remise" aria-label="Pourcentage de remise">
+              <span class="text-slate-400 font-bold">%</span>
+              <div class="reg-discount-chips">
+                <button type="button" class="reg-disc-chip" data-disc="5">5%</button>
+                <button type="button" class="reg-disc-chip" data-disc="10">10%</button>
+                <button type="button" class="reg-disc-chip reg-disc-chip-clear" data-disc="0">0%</button>
+              </div>
+            </div>
+            <span id="pos-discount-val" class="reg-discount-val font-mono">-0.00 DA</span>
+          </div>
+
+          <div class="reg-total-due">
+            <span class="reg-total-due-label">TOTAL À PAYER</span>
+            <span id="pos-total" class="val">0.00 DA</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============= RIGHT COLUMN: SCANNER, NUMPAD & CHECKOUT ============= -->
+    <section class="reg-col reg-col-checkout">
+      
+      <!-- Big Total Due Display -->
+      
+
+      <!-- Barcode Scanner Input Panel -->
+      <div class="reg-panel reg-scan-panel">
+        <label for="pos-search-input" class="reg-scan-label">
+          <span>⚡ Scanner Code-Barres / Entrée Manuelle</span>
+        </label>
+        <div class="reg-search-input-wrapper">
+          <span class="reg-search-icon">🏷️</span>
+          <input type="text" id="pos-search-input" placeholder="Scannez un code-barres ou tapez ici..." class="reg-search-input" aria-label="Scanner ou taper un code-barres" autocomplete="off">
+          <button type="button" id="reg-search-clear-btn" class="reg-search-clear hidden" title="Effacer">✕</button>
+        </div>
+      </div>
+
+      <!-- Quick Numeric Keypad (for manual barcode, void, customer, note) -->
+      <div class="reg-panel reg-keypad-panel">
+        <div class="reg-keypad-grid-simple">
+          <button type="button" class="reg-keypad-btn" data-key="7">7</button>
+          <button type="button" class="reg-keypad-btn" data-key="8">8</button>
+          <button type="button" class="reg-keypad-btn" data-key="9">9</button>
+          <button type="button" id="reg-key-void" class="reg-keypad-btn reg-keypad-btn-void" title="Annuler le dernier article">Annuler ✕</button>
+
+          <button type="button" class="reg-keypad-btn" data-key="4">4</button>
+          <button type="button" class="reg-keypad-btn" data-key="5">5</button>
+          <button type="button" class="reg-keypad-btn" data-key="6">6</button>
+          <button type="button" id="reg-key-customer" class="reg-keypad-btn reg-keypad-btn-accent" title="Consulter un client ou sa dette">Client 👤</button>
+
+          <button type="button" class="reg-keypad-btn" data-key="1">1</button>
+          <button type="button" class="reg-keypad-btn" data-key="2">2</button>
+          <button type="button" class="reg-keypad-btn" data-key="3">3</button>
+          <button type="button" id="reg-key-note" class="reg-keypad-btn" title="Ajouter une note">Note 📝</button>
+
+          <button type="button" class="reg-keypad-btn" data-key="0">0</button>
+          <button type="button" class="reg-keypad-btn" data-key=".">.</button>
+          <button type="button" id="reg-key-bksp" class="reg-keypad-btn" aria-label="Effacer">⌫</button>
+          <button type="button" id="reg-key-enter" class="reg-keypad-btn reg-keypad-btn-enter" title="Valider le code saisi">Entrée ↵</button>
+        </div>
+      </div>
+
+      <!-- Fast Checkout Buttons -->
+      <div class="reg-panel reg-payment-panel">
+        <div class="reg-pay-buttons">
+          <button id="pos-checkout-btn" class="reg-pay-btn reg-pay-cash" title="Paiement immédiat en espèces (Touche Espace)">
+            <div class="flex items-center gap-3">
+              <span id="pos-checkout-btn-icon" class="text-2xl">💵</span>
+              <div class="flex flex-col text-left">
+                <span id="pos-checkout-btn-text" class="font-black text-base tracking-wide">ESPÈCES (CASH)</span>
+                <span class="text-[11px] opacity-80">Encaissement direct au comptoir</span>
+              </div>
+            </div>
+            <span class="reg-pay-shortcut">[ESPACE]</span>
+          </button>
+
+          <button id="pos-credit-checkout-btn" class="reg-pay-btn reg-pay-credit" title="Vente à terme / Dette client (Touche F9)">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">🏦</span>
+              <div class="flex flex-col text-left">
+                <span class="font-black text-sm tracking-wide">CRÉDIT / DETTE CLIENT</span>
+                <span class="text-[10px] opacity-80">Carnet de crédit & acomptes</span>
+              </div>
+            </div>
+            <span class="reg-pay-shortcut">[F9]</span>
+          </button>
+        </div>
+
+        <!-- Smart Tender Chips -->
+        <div id="pos-smart-tender-section" class="reg-tender-section hidden">
+          <div class="reg-tender-header">
+            <span class="reg-tender-label">⚡ Rendu Express (1 Clic)</span>
+          </div>
+          <div id="pos-smart-tender-chips" class="reg-tender-grid"></div>
+        </div>
+
+        <!-- Receipt Auto-Print Toggle -->
+        <div class="reg-toggle-row">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="text-base shrink-0">🖨️</span>
+            <div class="flex flex-col min-w-0">
+              <span class="font-bold text-xs">Impression du Ticket</span>
+              <span id="pos-print-status-label" class="text-[10px] text-slate-400 truncate">Autorisée (Ticket imprimé)</span>
+            </div>
+          </div>
+          <label class="reg-switch">
+            <input type="checkbox" id="pos-toggle-auto-print" checked aria-label="Impression automatique du ticket">
+            <span></span>
+          </label>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <!-- HIDDEN BACKGROUND MOUNTS FOR pos.js (ensures 100% compatibility with pos.js without errors) -->
+  <div class="hidden" style="display:none;" aria-hidden="true">
+    <div id="pos-category-filters"></div>
+    <div id="pos-product-grid"></div>
+    <div id="pos-scroll-sentinel"></div>
+    <button id="open-add-product-btn"></button>
+    <button id="open-cam-scanner-btn"></button>
+    <button id="open-scanner-config-btn"></button>
+    <button id="open-pos-analytics-btn"></button>
+    <button id="open-pos-backup-btn"></button>
+  </div>
+
+</div>
     <!-- END SECTION 3: POS Terminal -->
 
     <!-- SECTION 4: Dedicated Inventory & Stock Management -->
@@ -1300,6 +1322,19 @@
           </div>
           <div id="page-analytics-expiring-batches" class="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
             <span class="text-slate-400 text-xs text-center py-6">Aucun lot proche de la péremption.</span>
+          </div>
+        </div>
+
+        <!-- Stock Conflicts Alerts & Reconciliation (Task 2) -->
+        <div class="glass-panel p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
+              <span>⚠️</span> <span>Conflits de Stock Négatif (Multi-Caisses)</span>
+            </h3>
+            <span id="page-analytics-conflicts-count" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">0 Conflits</span>
+          </div>
+          <div id="page-analytics-stock-conflicts" class="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
+            <span class="text-emerald-600 text-xs font-semibold py-4 text-center">✅ Aucun conflit de stock négatif détecté.</span>
           </div>
         </div>
 
@@ -2538,6 +2573,46 @@
       </div>
     </div>
   </div>
+
+  <!-- MODAL: Stock Conflict Resolution Modal (Task 2) -->
+  <div id="stock-conflict-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="glass-panel bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl flex flex-col gap-4">
+      <div class="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+        <div class="flex items-center gap-2.5">
+          <span class="text-xl">⚠️</span>
+          <div>
+            <h3 class="text-base font-bold text-slate-800 dark:text-slate-100">Résolution Conflit Stock</h3>
+            <p id="conflict-modal-subtitle" class="text-[11px] text-slate-400">Rapprochement d'inventaire</p>
+          </div>
+        </div>
+        <button id="close-conflict-modal-btn" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">✕</button>
+      </div>
+
+      <div class="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 flex flex-col gap-1.5">
+        <div class="flex items-center justify-between">
+          <span id="conflict-modal-product-name" class="font-bold text-rose-800 dark:text-rose-200 text-sm">Produit</span>
+          <span id="conflict-modal-stock-badge" class="px-2 py-0.5 rounded-full text-xs font-black bg-rose-600 text-white">-1 u.</span>
+        </div>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400">Ce produit a été vendu simultanément sur plusieurs caisses hors-ligne, entraînant un stock négatif.</p>
+      </div>
+
+      <form id="stock-conflict-form" onsubmit="handleResolveConflictSubmit(event)" class="flex flex-col gap-3">
+        <input type="hidden" id="conflict-modal-id">
+        <div>
+          <label class="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">Résolu par</label>
+          <input type="text" id="conflict-resolved-by" value="Manager" required class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold">
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">Note de résolution / Rapprochement physique *</label>
+          <textarea id="conflict-resolution-note" placeholder="ex: Recensement physique effectué: ajusté à 0 en rayon" required rows="3" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"></textarea>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button type="button" id="cancel-conflict-modal-btn" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Annuler</button>
+          <button type="submit" class="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 text-white shadow-sm hover:bg-emerald-700">Marquer comme Résolu</button>
+        </div>
+      </form>
+    </div>
+  </div>
   
   <!-- MODAL 1: Hardware Barcode Scanner Configuration -->
   <div id="scanner-config-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -3252,6 +3327,7 @@
   <script src="js/searchEngine.js?v=3.0"></script>
   <script src="js/pos.js?v=3.0"></script>
   <script src="js/app.js?v=3.0"></script>
+  <script src="js/pos-register.js?v=3.0"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

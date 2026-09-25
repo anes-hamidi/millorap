@@ -18,14 +18,14 @@ This document describes the multi-register synchronization architecture, offline
   - Customer debts and payments are unified across all registers.
   - Suppliers, purchase orders, and batch expiry data are globally accessible.
 
-### Placeholder Configuration in `public/js/db.js`
-In `public/js/db.js`, Dexie Cloud is initialized with the following structure:
+### Configuration in `public/js/db.js`
+In `public/js/db.js`, Dexie Cloud is initialized with `requireAuth: true` to enforce authentication across cash register terminals:
 ```javascript
 if (db.cloud && typeof db.cloud.configure === 'function') {
   db.cloud.configure({
     databaseUrl: "https://<YOUR_DEXIE_CLOUD_URL>.dexie.cloud", // <-- REPLACE WITH YOUR REAL DEXIE CLOUD URL
-    requireAuth: false, // Set to true if cashier user login is required
-    customLoginGui: false
+    requireAuth: true, // Enforce cashier user authentication per terminal
+    customLoginGui: false // Built-in OTP / provider login dialog
   });
 }
 ```
@@ -34,7 +34,12 @@ if (db.cloud && typeof db.cloud.configure === 'function') {
 1. Run `npx dexie-cloud create` to create your Dexie Cloud database instance.
 2. Obtain your database URL (e.g., `https://xyz123.dexie.cloud`).
 3. Replace the `databaseUrl` placeholder in `public/js/db.js`.
-4. Run `npx dexie-cloud whitelist` to whitelist your production or local domain(s).
+4. Run `npx dexie-cloud whitelist` to whitelist your production or local domain(s) (e.g., `npx dexie-cloud whitelist https://pos.yourshop.dz`).
+5. Configure Authentication & Cashier Access:
+   - Configure your OTP / email provider via Dexie Cloud CLI or dashboard (`npx dexie-cloud user-management`).
+   - Whitelist cashier email addresses or register cashiers with terminal access (`npx dexie-cloud user add cashier1@yourshop.dz`).
+   - Cashiers log in once per terminal using email OTP authentication; Dexie Cloud persists the session token in IndexedDB across browser relaunches.
+   - All terminals join the single shared shop realm to access synchronized products, inventory, and sales.
 
 ---
 

@@ -3,9 +3,12 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+const Database = require('better-sqlite3');
+
 const router = express.Router();
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
+const DB_FILE = path.join(DATA_DIR, 'millora.db');
 const PRODUCTS_FILE = path.join(DATA_DIR, 'pos_products.json');
 const SALES_FILE = path.join(DATA_DIR, 'sales_history.json');
 
@@ -13,6 +16,34 @@ const SALES_FILE = path.join(DATA_DIR, 'sales_history.json');
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
+
+// Initialize SQLite database with WAL mode for concurrent access
+const sqliteDb = new Database(DB_FILE);
+sqliteDb.pragma('journal_mode = WAL');
+
+// Create tables mirroring JSON data shapes
+sqliteDb.exec(`
+  CREATE TABLE IF NOT EXISTS products (
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    category TEXT,
+    price REAL,
+    stock REAL,
+    icon TEXT,
+    image TEXT,
+    barcode TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS sales (
+    id TEXT PRIMARY KEY,
+    timestamp TEXT,
+    items_json TEXT,
+    subtotal REAL,
+    discount REAL,
+    total REAL,
+    payment_method TEXT
+  );
+`);
 
 // Fallback products catalog if pos_products.json doesn't exist
 const SEED_PRODUCTS = [
@@ -27,35 +58,134 @@ const SEED_PRODUCTS = [
   { id: 'p9', name: 'Rouleaux Papier Thermique (x5)', category: 'Supplies', price: 900, stock: 30, icon: '📜', image: 'https://images.unsplash.com/photo-1607344645866-009c320c5ab8?w=400&auto=format&fit=crop&q=80', barcode: '890123456009' }
 ];
 
+// One-time initial migration from flat JSON files if SQLite tables are empty
+(function initMigration() {
+  try {
+    const prodCount = sqliteDb.prepare('SELECT COUNT(*) AS count FROM products').get().count;
+    if (prodCount === 0) {
+      let initialProducts = SEED_PRODUCTS;
+      if (fs.existsSync(PRODUCTS_FILE)) {
+        try {
+          const raw = fs.readFileSync(PRODUCTS_FILE, 'utf8');
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            initialProducts = parsed;
+          }
+        } catch (err) {
+          console.warn('[SQLite Init] Error reading pos_products.json:', err.message);
+        }
+      }
+
+      const insertProd = sqliteDb.prepare(`
+        INSERT OR REPLACE INTO products (id, name, category, price, stock, icon, image, barcode)
+        VALUES (@id, @name, @category, @price, @stock, @icon, @image, @barcode)
+      `);
+
+      const insertManyProds = sqliteDb.transaction(prods => {
+        for (const p of prods) {
+          const pid = p.id || p.barcode || ('p_' + Math.random().toString(36).substr(2, 9));
+          insertProd.run({
+            id: String(pid),
+            name: p.name || 'Produit',
+            category: p.category || 'Général',
+            price: Number(p.price || p.sellingPrice || 0),
+            stock: Number(p.stock != null ? p.stock : (p.currentStock != null ? p.currentStock : 0)),
+            icon: p.icon || '📦',
+            image: p.image || null,
+            barcode: p.barcode ? String(p.barcode) : null
+          });
+        }
+      });
+      insertManyProds(initialProducts);
+    }
+
+    const salesCount = sqliteDb.prepare('SELECT COUNT(*) AS count FROM sales').get().count;
+    if (salesCount === 0 && fs.existsSync(SALES_FILE)) {
+      try {
+        const rawSales = fs.readFileSync(SALES_FILE, 'utf8');
+        const parsedSales = JSON.parse(rawSales);
+        if (Array.isArray(parsedSales) && parsedSales.length > 0) {
+          const insertSale = sqliteDb.prepare(`
+            INSERT OR REPLACE INTO sales (id, timestamp, items_json, subtotal, discount, total, payment_method)
+            VALUES (@id, @timestamp, @items_json, @subtotal, @discount, @total, @payment_method)
+          `);
+          const insertManySales = sqliteDb.transaction(sales => {
+            for (const s of sales) {
+              insertSale.run({
+                id: String(s.id),
+                timestamp: s.timestamp || new Date().toISOString(),
+                items_json: typeof s.items === 'string' ? s.items : JSON.stringify(s.items || []),
+                subtotal: parseFloat(s.subtotal || 0),
+                discount: parseFloat(s.discount || 0),
+                total: parseFloat(s.total || 0),
+                payment_method: s.paymentMethod || s.payment_method || 'cash'
+              });
+            }
+          });
+          insertManySales(parsedSales);
+        }
+      } catch (err) {
+        console.warn('[SQLite Init] Error reading sales_history.json:', err.message);
+      }
+    }
+  } catch (err) {
+    console.error('[SQLite Init] Migration error:', err.message);
+  }
+})();
+
 async function getProducts() {
   try {
-    if (!fs.existsSync(PRODUCTS_FILE)) {
-      await fs.promises.writeFile(PRODUCTS_FILE, JSON.stringify(SEED_PRODUCTS, null, 2), 'utf8');
-      return SEED_PRODUCTS;
-    }
-    const content = await fs.promises.readFile(PRODUCTS_FILE, 'utf8');
-    return JSON.parse(content);
+    const rows = sqliteDb.prepare('SELECT id, name, category, price, stock, icon, image, barcode FROM products').all();
+    return rows;
   } catch (e) {
-    console.error('Error reading products:', e);
+    console.error('Error reading products from SQLite:', e);
     return SEED_PRODUCTS;
   }
 }
 
 async function getSalesHistory() {
   try {
-    if (!fs.existsSync(SALES_FILE)) {
-      return [];
-    }
-    const content = await fs.promises.readFile(SALES_FILE, 'utf8');
-    return JSON.parse(content);
+    const rows = sqliteDb.prepare('SELECT id, timestamp, items_json, subtotal, discount, total, payment_method FROM sales ORDER BY datetime(timestamp) DESC, rowid DESC').all();
+    return rows.map(r => ({
+      id: r.id,
+      timestamp: r.timestamp,
+      items: typeof r.items_json === 'string' ? JSON.parse(r.items_json) : (r.items_json || []),
+      subtotal: r.subtotal,
+      discount: r.discount,
+      total: r.total,
+      paymentMethod: r.payment_method
+    }));
   } catch (e) {
-    console.error('Error reading sales history:', e);
+    console.error('Error reading sales history from SQLite:', e);
     return [];
   }
 }
 
 async function saveSalesHistory(history) {
-  await fs.promises.writeFile(SALES_FILE, JSON.stringify(history, null, 2), 'utf8');
+  try {
+    const insertSale = sqliteDb.prepare(`
+      INSERT OR REPLACE INTO sales (id, timestamp, items_json, subtotal, discount, total, payment_method)
+      VALUES (@id, @timestamp, @items_json, @subtotal, @discount, @total, @payment_method)
+    `);
+
+    const insertTx = sqliteDb.transaction(items => {
+      for (const s of items) {
+        insertSale.run({
+          id: String(s.id),
+          timestamp: s.timestamp || new Date().toISOString(),
+          items_json: typeof s.items === 'string' ? s.items : JSON.stringify(s.items || []),
+          subtotal: parseFloat(s.subtotal || 0),
+          discount: parseFloat(s.discount || 0),
+          total: parseFloat(s.total || 0),
+          payment_method: s.paymentMethod || s.payment_method || 'cash'
+        });
+      }
+    });
+
+    insertTx(history);
+  } catch (e) {
+    console.error('Error saving sales history to SQLite:', e);
+  }
 }
 
 function getLocalIp() {
@@ -121,7 +251,7 @@ router.post('/checkout', async (req, res) => {
     // Save transaction record to local history store (async)
     const salesHistory = await getSalesHistory();
     salesHistory.unshift(saleRecord);
-    await saveSalesHistory(salesHistory.slice(0, 100)); // Keep last 100 sales
+    await saveSalesHistory(salesHistory);
 
     // Format receipt layout
     const formattedReceiptHtml = `

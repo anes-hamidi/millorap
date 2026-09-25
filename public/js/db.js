@@ -45,13 +45,22 @@
     corrections: '++id, timestamp, fieldType, rawExtraction, userCorrectedValue'
   });
 
+  // Database Schema Version 3 (Multi-Register Stock Conflicts Tracking)
+  db.version(3).stores({
+    stockConflicts: '++id, productId, detectedAt, currentStock, status, resolvedAt, resolvedBy'
+  });
+
   // Dexie Cloud helper hook (if dexie-cloud is activated in production)
-  if (db.cloud && typeof db.cloud.configure === 'function') {
+  const isDexieCloudConfigured = typeof db.cloud !== 'undefined' && typeof db.cloud.configure === 'function';
+  const DEXIE_CLOUD_URL = 'https://YOUR_SHOP_SUBDOMAIN.dexie.cloud';
+  const isPlaceholderUrl = !DEXIE_CLOUD_URL || DEXIE_CLOUD_URL.includes('YOUR_SHOP_SUBDOMAIN') || DEXIE_CLOUD_URL.includes('<YOUR_DEXIE_CLOUD_URL>');
+
+  if (isDexieCloudConfigured && !isPlaceholderUrl) {
     try {
       db.cloud.configure({
-        databaseUrl: 'https://YOUR_SHOP_SUBDOMAIN.dexie.cloud',
-        requireAuth: false,
-        customLoginGui: true
+        databaseUrl: DEXIE_CLOUD_URL,
+        requireAuth: true,
+        customLoginGui: false
       });
     } catch (e) {
       console.warn('[Dexie Cloud] Configure notice:', e.message);
@@ -772,6 +781,78 @@
     };
   }
 
+  async function checkStockConflict(productId, currentStock) {
+    if (!db.isOpen()) await db.open();
+    if (Number(currentStock) >= 0) return null;
+    if (!db.stockConflicts) return null;
+
+    const existing = await db.stockConflicts
+      .where('productId')
+      .equals(productId)
+      .filter(c => c.status === 'open')
+      .first();
+
+    if (existing) return existing;
+
+    const conflictRecord = {
+      productId,
+      detectedAt: new Date().toISOString(),
+      currentStock: Number(currentStock),
+      status: 'open',
+      resolvedAt: null,
+      resolvedBy: null,
+      resolutionNote: null
+    };
+
+    const conflictId = await db.stockConflicts.add(conflictRecord);
+    conflictRecord.id = conflictId;
+
+    if (db.stockLogs) {
+      await db.stockLogs.add({
+        productId,
+        timestamp: conflictRecord.detectedAt,
+        type: 'CONFLICT',
+        quantityChange: 0,
+        previousStock: Number(currentStock),
+        newStock: Number(currentStock),
+        referenceId: `CONFLICT_${conflictId}`,
+        note: `Negative stock detected (${currentStock}) - Stock conflict opened`
+      });
+    }
+
+    if (typeof window !== 'undefined' && window.dispatchEvent) {
+      window.dispatchEvent(new CustomEvent('stock-conflicts-updated', { detail: { productId, currentStock } }));
+    }
+
+    return conflictRecord;
+  }
+
+  async function resolveStockConflict(conflictId, { resolvedBy = 'Manager', resolutionNote = '' } = {}) {
+    if (!db.isOpen()) await db.open();
+    if (!db.stockConflicts) return;
+
+    const resolvedAt = new Date().toISOString();
+    await db.stockConflicts.update(conflictId, {
+      status: 'resolved',
+      resolvedAt,
+      resolvedBy,
+      resolutionNote
+    });
+
+    if (typeof window !== 'undefined' && window.dispatchEvent) {
+      window.dispatchEvent(new CustomEvent('stock-conflicts-updated', { detail: { conflictId } }));
+    }
+  }
+
+  async function getStockConflicts(status = 'open') {
+    if (!db.isOpen()) await db.open();
+    if (!db.stockConflicts) return [];
+    if (status === 'all') {
+      return await db.stockConflicts.reverse().toArray();
+    }
+    return await db.stockConflicts.where('status').equals(status).reverse().toArray();
+  }
+
   // Exposed FlexiDB global interface
   window.FlexiDB = {
     db: db,
@@ -788,6 +869,9 @@
     importAlgeriaSupermarketCatalog: importAlgeriaSupermarketCatalog,
     getProductsPaged: getProductsPaged,
     getInventoryStats: getInventoryStats,
+    checkStockConflict: checkStockConflict,
+    resolveStockConflict: resolveStockConflict,
+    getStockConflicts: getStockConflicts,
     DEFAULT_SEED_PRODUCTS: DEFAULT_SEED_PRODUCTS,
     DEFAULT_SEED_CATEGORIES: DEFAULT_SEED_CATEGORIES,
     DEFAULT_SEED_CUSTOMERS: DEFAULT_SEED_CUSTOMERS,

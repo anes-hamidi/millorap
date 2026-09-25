@@ -17,6 +17,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "dexie": "^4.4.6",
     "dexie-cloud-addon": "^4.4.15",
     "express": "^5.2.1",

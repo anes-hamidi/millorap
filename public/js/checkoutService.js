@@ -31,6 +31,7 @@
     // Stores participating in atomic transaction
     const txStores = [db.products, db.sales, db.saleItems, db.stockLogs];
     if (db.batches) txStores.push(db.batches);
+    if (db.stockConflicts) txStores.push(db.stockConflicts);
 
     // Execute atomic IndexedDB transaction across all stores
     return await db.transaction('rw', txStores, async () => {
@@ -132,12 +133,19 @@
         const numericProdId = Number(line.productId);
         const targetProdId = isNaN(numericProdId) ? line.productId : numericProdId;
 
-        // Multi-register race-condition safe relative stock decrement with non-negative guard
+        // Multi-register race-condition relative stock decrement
+        let resultingStock = newStock;
         await db.products.where('id').equals(targetProdId).modify(p => {
           const current = Number(p.currentStock) || 0;
-          p.currentStock = Math.max(0, current - line.baseQuantity);
+          p.currentStock = current - line.baseQuantity;
+          resultingStock = p.currentStock;
           p.updatedAt = timestamp;
         });
+
+        // Check if concurrent offline checkouts drove stock negative
+        if (resultingStock < 0 && window.FlexiDB?.checkStockConflict) {
+          await window.FlexiDB.checkStockConflict(targetProdId, resultingStock);
+        }
 
         // FIFO Depletion of perishable batches (if batches store exists)
         if (db.batches) {
